@@ -10,7 +10,7 @@ import logging
 
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import State
-from torchtnt.framework.unit import TTrainUnit
+from torchtnt.framework.unit import TPredictUnit, TTrainUnit
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -54,3 +54,10 @@ class EmptyDataloaderDetectorCallback(Callback):
                 raise RuntimeError(error_msg)
         else:
             self._consecutive_empty_train_epochs = 0
+
+    def on_predict_epoch_end(self, state: State, unit: TPredictUnit) -> None:
+        num_steps_in_predict = unit.predict_progress.num_steps_completed_in_prev_epoch
+        if num_steps_in_predict == 0:
+            raise RuntimeError(
+                "Empty predict epoch detected! Epoch completed 0 steps. This could indicate not enough data in your input."
+            )
