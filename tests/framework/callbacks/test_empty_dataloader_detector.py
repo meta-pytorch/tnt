@@ -11,7 +11,12 @@ from unittest.mock import patch
 
 from torch.utils.data import DataLoader, Dataset
 
-from torchtnt.framework._test_utils import Batch, DummyTrainUnit, get_dummy_train_state
+from torchtnt.framework._test_utils import (
+    Batch,
+    DummyPredictUnit,
+    DummyTrainUnit,
+    get_dummy_train_state,
+)
 from torchtnt.framework.callbacks.empty_dataloader_detector import (
     EmptyDataloaderDetectorCallback,
 )
@@ -204,3 +209,19 @@ class EmptyDataloaderDetectorCallbackTest(unittest.TestCase):
             )
 
         self.assertEqual(callback_with_exception._consecutive_empty_train_epochs, 2)
+
+    def test_predict_empty_epoch_detection(self) -> None:
+        """Test that empty predict epoch immediately raises an exception."""
+        callback = EmptyDataloaderDetectorCallback(threshold=2)
+        state = get_dummy_train_state()
+        unit = DummyPredictUnit(input_dim=2)
+
+        # Set predict progress to 0 steps
+        unit.predict_progress._num_steps_completed_in_prev_epoch = 0
+
+        # Empty predict epoch should immediately raise exception
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Empty predict epoch detected! Epoch completed 0 steps",
+        ):
+            callback.on_predict_epoch_end(state, unit)
