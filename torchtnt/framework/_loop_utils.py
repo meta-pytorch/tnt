@@ -77,11 +77,11 @@ def _maybe_set_distributed_sampler_epoch(
     See: https://pytorch.org/docs/stable/data.html#torch.utils.data.distributed.DistributedSampler
     """
     # Set current training epoch for any DistributedSampler in dataloader
-    if isinstance(dataloader, torch.utils.data.DataLoader) and isinstance(
-        dataloader.sampler,
-        _DistributedSampler,
-    ):
-        dataloader.sampler.set_epoch(current_epoch)
+    if isinstance(dataloader, torch.utils.data.DataLoader):
+        if isinstance(dataloader.sampler, _DistributedSampler):
+            dataloader.sampler.set_epoch(current_epoch)
+        elif isinstance(dataloader.batch_sampler, _DistributedSampler):
+            dataloader.batch_sampler.set_epoch(current_epoch)
 
 
 def _set_module_training_mode(
