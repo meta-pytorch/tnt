@@ -11,11 +11,12 @@ from typing import Dict, Iterable, Optional, Protocol, runtime_checkable, TypeVa
 
 import torch
 import torch.nn as nn
+import torchao
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 _EXPORT_UTILS_AVAIL = True
 try:
-    from torch.ao.quantization.pt2e.export_utils import model_is_exported
+    from torchao.quantization.pt2e.export_utils import model_is_exported
 except Exception:
     _EXPORT_UTILS_AVAIL = False
 
@@ -101,9 +102,9 @@ def _set_module_training_mode(
             else module
         ):
             move_fn = (
-                torch.ao.quantization.move_exported_model_to_train
+                torchao.quantization.pt2e.move_exported_model_to_train
                 if mode
-                else torch.ao.quantization.move_exported_model_to_eval
+                else torchao.quantization.pt2e.move_exported_model_to_eval
             )
             # pyre-fixme[6]: For 1st argument expected `GraphModule` but got
             #  `Union[Module, Tensor]`.
@@ -136,9 +137,9 @@ def _reset_module_training_mode(
                 else module
             ):
                 move_fn = (
-                    torch.ao.quantization.move_exported_model_to_train
+                    torchao.quantization.pt2e.move_exported_model_to_train
                     if prior_modes[name]
-                    else torch.ao.quantization.move_exported_model_to_eval
+                    else torchao.quantization.pt2e.move_exported_model_to_eval
                 )
                 # pyre-fixme[6]: For 1st argument expected `GraphModule` but got
                 #  `Union[Module, Tensor]`.
