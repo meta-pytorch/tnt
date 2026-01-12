@@ -12,7 +12,6 @@ from copy import deepcopy
 from typing import List, Tuple
 
 import torch
-
 from torchtnt.utils.swa import _AVERAGED_MODEL_AVAIL, AveragedModel
 
 if not _AVERAGED_MODEL_AVAIL:

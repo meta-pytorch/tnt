@@ -9,10 +9,8 @@
 import unittest
 
 from pyre_extensions import none_throws
-
 from torch import nn
 from torchtnt.framework import ActivePhase
-
 from torchtnt.framework._test_utils import (
     DummyAutoUnit,
     DummyEvalUnit,
@@ -25,7 +23,6 @@ from torchtnt.framework._test_utils import (
     get_dummy_predict_state,
     get_dummy_train_state,
 )
-
 from torchtnt.framework.callbacks._checkpoint_utils import (
     _get_epoch,
     _get_step_phase_mapping,

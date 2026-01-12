@@ -11,7 +11,6 @@ import logging
 from typing import Any, Optional
 
 from packaging.version import Version
-
 from torchtnt.utils.distributed import get_global_rank
 from torchtnt.utils.version import get_python_version
 

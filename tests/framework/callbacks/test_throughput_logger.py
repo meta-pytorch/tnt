@@ -12,7 +12,6 @@ from unittest.mock import ANY, call, MagicMock, patch
 
 import torch
 from pyre_extensions import none_throws
-
 from torchtnt.framework._callback_handler import CallbackHandler
 from torchtnt.framework._test_utils import (
     DummyAutoUnit,
@@ -22,7 +21,6 @@ from torchtnt.framework._test_utils import (
 )
 from torchtnt.framework.callbacks.throughput_logger import ThroughputLogger
 from torchtnt.framework.predict import predict
-
 from torchtnt.framework.state import ActivePhase, EntryPoint, PhaseState, State
 from torchtnt.framework.train import _train_impl, train
 from torchtnt.framework.unit import TrainUnit

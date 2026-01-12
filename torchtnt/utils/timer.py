@@ -27,7 +27,6 @@ from typing import (
 )
 
 import numpy as np
-
 import torch
 import torch.distributed as dist
 from tabulate import tabulate

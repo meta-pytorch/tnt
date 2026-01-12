@@ -8,7 +8,6 @@
 # pyre-strict
 
 import unittest
-
 from typing import Any, Dict
 from unittest.mock import patch
 
@@ -16,7 +15,6 @@ import torch
 from torch import nn
 from torchtnt.framework._test_utils import DummyAutoUnit
 from torchtnt.framework.unit import AppStateMixin
-
 from torchtnt.utils.env import init_from_env
 from torchtnt.utils.lr_scheduler import TLRScheduler
 from torchtnt.utils.prepare_module import FSDP2OptimizerWrapper, FSDPOptimizerWrapper

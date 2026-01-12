@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 from torchtnt.framework._test_utils import DummyTrainUnit, generate_random_dataloader
 from torchtnt.framework.callbacks.learning_rate_monitor import LearningRateMonitor
 from torchtnt.framework.train import train
-
 from torchtnt.utils.loggers.logger import MetricLogger
 
 

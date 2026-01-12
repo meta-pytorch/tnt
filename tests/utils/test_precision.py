@@ -12,7 +12,6 @@ import unittest
 import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
-
 from torchtnt.utils.precision import (
     convert_precision_str_to_dtype,
     get_grad_scaler_from_precision,

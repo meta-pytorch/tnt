@@ -13,7 +13,6 @@ import unittest
 from typing import Any
 
 import fsspec
-
 from torchtnt.utils.fsspec import get_filesystem
 
 

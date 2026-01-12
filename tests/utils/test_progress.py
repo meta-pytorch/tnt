@@ -12,7 +12,6 @@ from typing import Iterable, Iterator
 from unittest.mock import patch
 
 from torchtnt.framework._test_utils import generate_random_dataloader
-
 from torchtnt.utils.progress import (
     estimated_steps_in_epoch,
     estimated_steps_in_fit,

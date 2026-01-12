@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Set
 
 from torchtnt.utils.anomaly_evaluation import MetricAnomalyEvaluator
-
 from torchtnt.utils.loggers.logger import MetricLogger, Scalar
 from torchtnt.utils.loggers.utils import scalar_to_float
 

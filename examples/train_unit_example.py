@@ -22,7 +22,6 @@ from torchtnt.framework.state import State
 from torchtnt.framework.train import train
 from torchtnt.framework.unit import TrainUnit
 from torchtnt.utils import copy_data_to_device, init_from_env, seed, TLRScheduler
-
 from torchtnt.utils.loggers import TensorBoardLogger
 
 _logger: logging.Logger = logging.getLogger(__name__)

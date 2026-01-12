@@ -8,13 +8,11 @@
 # pyre-strict
 
 import unittest
-
 from copy import deepcopy
 from typing import Tuple, TypeVar
 from unittest.mock import MagicMock, patch
 
 import torch
-
 from pyre_extensions import ParameterSpecification as ParamSpec
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
@@ -24,7 +22,6 @@ from torchtnt.framework._test_utils import (
     generate_random_iterable_dataloader,
     get_dummy_train_state,
 )
-
 from torchtnt.framework.auto_unit import AutoPredictUnit, SWALRParams, SWAParams
 from torchtnt.framework.evaluate import evaluate
 from torchtnt.framework.fit import fit

@@ -14,7 +14,6 @@ import unittest
 import torch
 from torchtnt.utils.device import get_device_from_env
 from torchtnt.utils.oom import log_memory_snapshot
-
 from torchtnt.utils.test_utils import skip_if_not_gpu
 
 

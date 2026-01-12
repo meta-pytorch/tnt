@@ -16,7 +16,6 @@ import torch
 from libfb.py import parutil
 from torch.utils.data import random_split
 from torch.utils.data.dataset import Dataset, Subset
-
 from torchtnt.examples.mingpt.char_dataset import CharDataset, DataConfig
 from torchtnt.examples.mingpt.model import (
     create_optimizer,

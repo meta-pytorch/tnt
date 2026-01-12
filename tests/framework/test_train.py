@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 
 import torch
 from torch import nn
-
 from torchtnt.framework._test_utils import DummyTrainUnit, generate_random_dataloader
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import State

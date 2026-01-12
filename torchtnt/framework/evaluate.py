@@ -19,7 +19,6 @@ from torchtnt.framework._loop_utils import (
     _set_module_training_mode,
 )
 from torchtnt.framework.callback import Callback
-
 from torchtnt.framework.state import ActivePhase, EntryPoint, PhaseState, State
 from torchtnt.framework.unit import TEvalData, TEvalUnit
 from torchtnt.framework.utils import get_timing_context

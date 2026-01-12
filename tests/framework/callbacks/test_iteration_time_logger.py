@@ -12,7 +12,6 @@ from unittest.mock import call, MagicMock
 
 import torch
 from pyre_extensions import none_throws
-
 from torch.utils.tensorboard import SummaryWriter
 from torchtnt.framework._callback_handler import CallbackHandler
 from torchtnt.framework._test_utils import (
@@ -23,7 +22,6 @@ from torchtnt.framework._test_utils import (
     generate_random_dataloader,
 )
 from torchtnt.framework.callbacks.iteration_time_logger import IterationTimeLogger
-
 from torchtnt.framework.state import EntryPoint, PhaseState, State
 from torchtnt.framework.train import _train_impl, train
 from torchtnt.utils.loggers.logger import MetricLogger

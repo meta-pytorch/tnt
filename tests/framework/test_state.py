@@ -10,7 +10,6 @@
 import unittest
 
 from torchtnt.framework import ActivePhase
-
 from torchtnt.framework.state import _check_loop_condition, PhaseState
 from torchtnt.utils.checkpoint import Phase
 

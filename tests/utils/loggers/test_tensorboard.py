@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, Mock, patch
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from torchtnt.utils.anomaly_evaluation import ThresholdEvaluator
 from torchtnt.utils.loggers.anomaly_logger import TrackedMetric
-
 from torchtnt.utils.loggers.tensorboard import TensorBoardLogger
 
 

@@ -15,7 +15,6 @@ from torchtnt.framework.callbacks.slow_rank_detector import (
     _get_min_max_indices,
     SlowRankDetector,
 )
-
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import TrainUnit
 from torchtnt.utils.distributed import get_global_rank, spawn_multi_process

@@ -12,7 +12,6 @@ import sys
 from typing import Mapping, Optional
 
 from torchtnt.utils.distributed import rank_zero_fn
-
 from torchtnt.utils.loggers.logger import MetricLogger, Scalar
 from torchtnt.utils.loggers.utils import scalar_to_float
 

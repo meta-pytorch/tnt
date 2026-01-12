@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import torchtnt.framework.callbacks.time_limit_interrupter as time_limit_interrupter
-
 from torchtnt.framework._test_utils import DummyTrainUnit, get_dummy_train_state
 from torchtnt.framework.callbacks.time_limit_interrupter import TimeLimitInterrupter
 

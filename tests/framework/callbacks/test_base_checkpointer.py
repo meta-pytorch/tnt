@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 import torch
 import torch.distributed as dist
 from torch import nn
-
 from torchtnt.framework._test_utils import (
     Batch,
     DummyAutoUnit,
@@ -40,7 +39,6 @@ from torchtnt.framework.evaluate import evaluate
 from torchtnt.framework.fit import fit
 from torchtnt.framework.predict import predict
 from torchtnt.framework.state import ActivePhase, State
-
 from torchtnt.framework.train import train
 from torchtnt.framework.unit import (
     AppStateMixin,

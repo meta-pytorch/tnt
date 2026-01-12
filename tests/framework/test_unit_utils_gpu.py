@@ -11,7 +11,6 @@ import unittest
 from typing import Dict
 
 import torch
-
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.optim import Optimizer
 from torchtnt.framework._unit_utils import _find_optimizers_for_module

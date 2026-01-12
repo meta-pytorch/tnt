@@ -14,7 +14,6 @@ from datetime import timedelta
 from typing import Optional, Union
 
 import numpy as np
-
 import torch
 from torch.distributed.constants import default_pg_timeout
 from torchtnt.utils.device import get_device_from_env, set_float32_precision

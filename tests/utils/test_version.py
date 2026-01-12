@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import torch
 from packaging.version import Version
-
 from torchtnt.utils import version
 
 

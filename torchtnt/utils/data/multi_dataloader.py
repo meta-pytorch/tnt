@@ -13,7 +13,6 @@ import logging
 from typing import Any, Dict, Iterable, Iterator, Optional, Type, TYPE_CHECKING, Union
 
 from pyre_extensions import none_throws
-
 from torchtnt.utils.data.iterators import (
     DataIterationStrategy,
     DataIterationStrategyRegistry,

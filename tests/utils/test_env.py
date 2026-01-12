@@ -11,7 +11,6 @@ import os
 import unittest
 
 import numpy as np
-
 import torch
 import torch.distributed.launcher as pet
 from torchtnt.utils.device import get_device_from_env

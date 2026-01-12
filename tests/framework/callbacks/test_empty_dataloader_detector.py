@@ -10,7 +10,6 @@ import unittest
 from unittest.mock import patch
 
 from torch.utils.data import DataLoader, Dataset
-
 from torchtnt.framework._test_utils import (
     Batch,
     DummyPredictUnit,

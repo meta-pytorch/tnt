@@ -12,7 +12,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from torchtnt.framework.utils import get_timing_context
-
 from torchtnt.utils.timer import Timer
 
 

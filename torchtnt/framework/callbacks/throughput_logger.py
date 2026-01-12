@@ -13,7 +13,6 @@ from collections import defaultdict
 from typing import Dict, Mapping
 
 from pyre_extensions import none_throws
-
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import ActivePhase, State
 from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit

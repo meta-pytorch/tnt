@@ -15,7 +15,6 @@ from unittest.mock import MagicMock, patch
 
 import torch
 from torch import distributed as dist, nn
-
 from torchtnt.framework._test_utils import DummyAutoUnit, generate_random_dataloader
 from torchtnt.framework.callbacks.dcp_saver import DistributedCheckpointSaver
 from torchtnt.framework.train import train

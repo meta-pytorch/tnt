@@ -10,7 +10,6 @@
 import unittest
 
 import torch
-
 from torchtnt.utils.nan import check_for_nan_or_inf, register_nan_hooks_on_whole_graph
 
 

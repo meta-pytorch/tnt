@@ -16,7 +16,6 @@ from torchtnt.framework._test_utils import (
     DummyTrainUnit,
     generate_random_dataloader,
 )
-
 from torchtnt.framework.callbacks.module_summary import ModuleSummary
 from torchtnt.framework.state import EntryPoint, PhaseState, State
 

@@ -344,7 +344,7 @@ TReturn = TypeVar("TReturn")
 
 
 def rank_zero_fn(
-    fn: Callable[TParams, TReturn]
+    fn: Callable[TParams, TReturn],
 ) -> Callable[TParams, Optional[TReturn]]:
     """Function that can be used as a decorator to enable a function to be called on global rank 0 only.
 
@@ -379,7 +379,7 @@ def rank_zero_fn(
 
 
 def local_rank_zero_fn(
-    fn: Callable[TParams, TReturn]
+    fn: Callable[TParams, TReturn],
 ) -> Callable[TParams, Optional[TReturn]]:
     """Function that can be used as a decorator to enable a function to be called on local rank 0 only.
 

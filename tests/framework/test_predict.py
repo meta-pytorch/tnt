@@ -13,11 +13,9 @@ from unittest.mock import MagicMock, patch
 
 import torch
 from torch import nn
-
 from torchtnt.framework._test_utils import DummyPredictUnit, generate_random_dataloader
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.callbacks.dcp_saver import DistributedCheckpointSaver
-
 from torchtnt.framework.predict import predict
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import PredictUnit, TPredictUnit

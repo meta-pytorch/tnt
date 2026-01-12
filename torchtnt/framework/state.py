@@ -14,7 +14,6 @@ from typing import Generic, Iterable, Optional, TypeVar
 
 from pyre_extensions import none_throws
 from torchtnt.utils.checkpoint import Phase
-
 from torchtnt.utils.timer import BoundedTimer, TimerProtocol
 
 _logger: logging.Logger = logging.getLogger(__name__)

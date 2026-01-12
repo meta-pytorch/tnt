@@ -9,7 +9,6 @@
 from typing import Dict, Optional, Union
 
 import torch
-
 from torch.utils.tensorboard import SummaryWriter
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import State

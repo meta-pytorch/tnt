@@ -13,7 +13,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-
 import torch.distributed as dist
 from torch import nn
 from torchsnapshot import Snapshot
@@ -22,7 +21,6 @@ from torchtnt.framework._test_utils import Batch
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import TrainUnit
 from torchtnt.utils import get_global_rank, init_from_env
-
 from torchtnt.utils.checkpoint import (
     _metadata_exists,
     _retrieve_checkpoint_dirpaths,

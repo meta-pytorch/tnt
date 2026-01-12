@@ -11,7 +11,6 @@ import unittest
 from copy import deepcopy
 
 import torch
-
 from torchtnt.utils.misc import (
     days_to_secs,
     transfer_batch_norm_stats,

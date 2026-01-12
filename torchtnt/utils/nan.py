@@ -24,7 +24,7 @@ def _get_grad_fn_or_grad_acc(t: Union[torch.Tensor, GradientEdge]) -> Node:
 
 
 def register_nan_hooks_on_whole_graph(  # noqa: C901
-    t_outputs: Sequence[Union[torch.Tensor, GradientEdge]]
+    t_outputs: Sequence[Union[torch.Tensor, GradientEdge]],
 ) -> Callable[[], None]:
     """
     Registers a nan hook on the whole graph of the given tensors. The hook will throw error if a nan is detected.

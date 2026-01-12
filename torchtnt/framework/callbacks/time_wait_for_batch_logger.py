@@ -11,7 +11,6 @@ from typing import cast, Union
 
 from pyre_extensions import none_throws
 from torch.utils.tensorboard import SummaryWriter
-
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit

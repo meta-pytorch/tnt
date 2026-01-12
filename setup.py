@@ -7,7 +7,6 @@
 import argparse
 import os
 import sys
-
 from datetime import date
 from typing import List
 

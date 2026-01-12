@@ -11,7 +11,6 @@ from typing import Iterable, List, Optional
 
 import torch
 from pyre_extensions import none_throws
-
 from torchtnt.framework._callback_handler import CallbackHandler
 from torchtnt.framework._loop_utils import (
     _is_epoch_done,

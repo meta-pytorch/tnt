@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from torchtnt.framework._test_utils import DummyEvalUnit, DummyPredictUnit
-
 from torchtnt.framework.callbacks.periodic_distributed_sync import (
     PeriodicDistributedSync,
 )

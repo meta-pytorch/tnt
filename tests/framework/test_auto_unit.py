@@ -12,7 +12,6 @@ from typing import Any, Literal, Optional, Tuple, TypeVar
 from unittest.mock import MagicMock, Mock, patch
 
 import torch
-
 from pyre_extensions import none_throws, ParameterSpecification as ParamSpec
 from torch import nn
 from torch.distributed import GradBucket
@@ -22,7 +21,6 @@ from torchtnt.framework._test_utils import (
     generate_random_iterable_dataloader,
     get_dummy_train_state,
 )
-
 from torchtnt.framework.auto_unit import (
     AutoPredictUnit,
     AutoUnit,

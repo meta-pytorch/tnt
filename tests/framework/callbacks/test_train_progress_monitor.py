@@ -12,7 +12,6 @@ import unittest
 from torchtnt.framework._test_utils import DummyTrainUnit, generate_random_dataloader
 from torchtnt.framework.callbacks.train_progress_monitor import TrainProgressMonitor
 from torchtnt.framework.train import train
-
 from torchtnt.utils.loggers import InMemoryLogger
 
 

@@ -12,13 +12,11 @@ import unittest
 from unittest.mock import call, MagicMock, patch
 
 import torch
-
 from torchtnt.utils.anomaly_evaluation import (
     IsNaNEvaluator,
     MetricAnomalyEvaluator,
     ThresholdEvaluator,
 )
-
 from torchtnt.utils.loggers.anomaly_logger import AnomalyLogger, TrackedMetric
 
 

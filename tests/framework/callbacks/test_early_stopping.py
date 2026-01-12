@@ -15,11 +15,9 @@ from torchtnt.framework._test_utils import (
     get_dummy_eval_state,
     get_dummy_train_state,
 )
-
 from torchtnt.framework.callbacks.early_stopping import EarlyStopping
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import EvalUnit, TrainUnit
-
 from torchtnt.utils.early_stop_checker import EarlyStopChecker
 
 

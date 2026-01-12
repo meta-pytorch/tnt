@@ -10,12 +10,10 @@
 from typing import Any, cast, Dict, Union
 
 from pyre_extensions import none_throws
-
 from torchtnt.framework.callbacks.checkpointer_types import RestoreOptions
 from torchtnt.framework.state import ActivePhase, EntryPoint, State
 from torchtnt.framework.unit import AppStateMixin, TEvalUnit, TPredictUnit, TTrainUnit
 from torchtnt.utils.checkpoint import Phase
-
 from torchtnt.utils.stateful import Stateful
 
 

@@ -10,7 +10,6 @@ import unittest
 from typing import Tuple
 
 import torch
-
 from torch.utils.data import Dataset, TensorDataset
 from torchtnt.utils.data.data_prefetcher import CudaDataPrefetcher
 from torchtnt.utils.test_utils import skip_if_not_gpu

@@ -15,7 +15,6 @@ from time import monotonic
 from typing import Dict, Mapping
 
 from torchtnt.utils.distributed import get_global_rank
-
 from torchtnt.utils.loggers.logger import Scalar
 from torchtnt.utils.loggers.utils import scalar_to_float
 

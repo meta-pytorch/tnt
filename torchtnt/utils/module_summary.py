@@ -674,7 +674,7 @@ def _activation_size_hook(
 
 
 def _forward_time_pre_hook(
-    timer_mapping: Dict[str, float]
+    timer_mapping: Dict[str, float],
     # pyre-fixme: Invalid type parameters [24]
 ) -> Callable[[str], Callable]:
     def intermediate_hook(

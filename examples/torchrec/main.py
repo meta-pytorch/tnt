@@ -11,7 +11,6 @@ import argparse
 import sys
 import tempfile
 import uuid
-
 from typing import Iterator, List, Optional, Tuple
 
 import torch
@@ -44,7 +43,6 @@ from torchrec.optim.optimizers import in_backward_optimizer_filter
 from torchtnt.framework.callbacks import TQDMProgressBar
 from torchtnt.framework.fit import fit
 from torchtnt.framework.state import State
-
 from torchtnt.framework.unit import EvalUnit, TrainUnit
 from torchtnt.utils import (
     get_process_group_backend_from_device,

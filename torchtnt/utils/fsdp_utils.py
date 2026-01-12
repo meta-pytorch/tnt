@@ -7,14 +7,11 @@
 # pyre-strict
 
 import importlib
-
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Type
 
 import torch
-
 from torch.distributed.fsdp import StateDictType as _StateDictType
-
 from torch.distributed.fsdp.fully_sharded_data_parallel import (
     BackwardPrefetch as _BackwardPrefetch,
     MixedPrecision as _MixedPrecision,

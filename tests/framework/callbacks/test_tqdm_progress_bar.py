@@ -10,7 +10,6 @@
 import unittest
 
 from pyre_extensions import none_throws
-
 from torchtnt.framework._test_utils import (
     DummyEvalUnit,
     DummyPredictUnit,

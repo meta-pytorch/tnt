@@ -9,7 +9,6 @@
 import argparse
 import sys
 import tempfile
-
 from argparse import Namespace
 from typing import List, Optional, Tuple
 

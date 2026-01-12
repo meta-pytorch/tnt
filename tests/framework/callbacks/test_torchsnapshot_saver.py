@@ -21,7 +21,6 @@ import torch.distributed as dist
 from torch import nn
 from torch.utils.data import DataLoader
 from torchsnapshot.test_utils import assert_state_dict_eq, check_state_dict_eq
-
 from torchtnt.framework._test_utils import (
     DummyAutoUnit,
     DummyTrainUnit,
