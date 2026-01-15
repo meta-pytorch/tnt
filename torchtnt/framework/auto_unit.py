@@ -11,7 +11,7 @@ import contextlib
 import logging
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import (
     Any,
     Callable,
@@ -83,6 +83,29 @@ class SWALRParams:
     anneal_steps_or_epochs: int
     anneal_strategy: str = "linear"
     swa_lrs: Union[List[float], float] = 0.05
+
+
+@dataclass
+class GradScalerParams:
+    """
+    Dataclass to store parameters for gradient scaling.
+
+    Args:
+        init_scale: Initial scale factor. Default: 2.**16 (65536)
+        growth_factor: Factor by which the scale is multiplied during update
+            if no inf/NaN gradients occur for ``growth_interval`` consecutive iterations.
+            Default: 2.0
+        backoff_factor: Factor by which the scale is multiplied during update
+            if inf/NaN gradients occur in an iteration. Default: 0.5
+        growth_interval: Number of consecutive iterations without inf/NaN gradients
+            that must occur for the scale to be multiplied by ``growth_factor``.
+            Default: 2000
+    """
+
+    init_scale: float = 2.0**16
+    growth_factor: float = 2.0
+    backoff_factor: float = 0.5
+    growth_interval: int = 2000
 
 
 @dataclass
@@ -517,6 +540,7 @@ class AutoUnit(
         zero_grad_at_train_step_start: bool = False,
         global_mesh: Optional[GlobalMeshCoordinator] = None,
         enable_loss_parallel: bool = False,
+        grad_scaler_params: Optional[GradScalerParams] = None,
     ) -> None:
         super().__init__(
             module=module,
@@ -565,10 +589,15 @@ class AutoUnit(
         )
 
         self.grad_scaler: Optional[GradScaler] = None
+        if grad_scaler_params is not None:
+            grad_scaler_kwargs = asdict(grad_scaler_params)
+        else:
+            grad_scaler_kwargs = None
         if self.precision:
             self.grad_scaler = get_grad_scaler_from_precision(
                 self.precision,
                 is_fsdp1_module=_is_fsdp1_module(self.module),
+                grad_scaler_kwargs=grad_scaler_kwargs,
             )
 
         self.step_lr_interval = step_lr_interval
