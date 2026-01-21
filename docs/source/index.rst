@@ -106,15 +106,6 @@ Documentation
 
    .. toctree::
       :maxdepth: 2
-      :caption: Framework (Meta)
-      :glob:
-
-      meta/framework/callbacks
-
-.. fbcode::
-
-   .. toctree::
-      :maxdepth: 2
       :caption: Utils (Meta)
       :glob:
 
