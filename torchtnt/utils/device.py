@@ -357,5 +357,7 @@ def set_float32_precision(precision: str = "high") -> None:
     # set precision for convolution operations
     if precision == "highest":
         torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
     else:
         torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
