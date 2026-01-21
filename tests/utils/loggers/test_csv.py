@@ -45,3 +45,19 @@ class CSVLoggerTest(unittest.TestCase):
                 output = list(csv.DictReader(f))
                 self.assertEqual(float(output[0][log_name]), log_value)
                 self.assertEqual(int(output[0]["step"]), log_step)
+
+    def test_csv_log_async(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir, "test.csv").as_posix()
+            logger = CSVLogger(csv_path, steps_before_flushing=1, async_write=True)
+            log_name = "asdf"
+            log_value = 123.0
+            log_step = 10
+            logger.log(log_name, log_value, log_step)
+            logger.close()
+
+            with open(csv_path) as f:
+                output = list(csv.DictReader(f))
+                # pyre-fixme[16]: `_DictReadMapping` has no attribute `__getitem__`.
+                self.assertEqual(float(output[0][log_name]), log_value)
+                self.assertEqual(int(output[0]["step"]), log_step)
