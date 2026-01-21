@@ -22,7 +22,7 @@ from torch.utils._pytree import PyTree, tree_map
 
 aten: torch._ops._OpNamespace = torch.ops.aten
 T = TypeVar("T")
-InputType = Union[torch.Tensor, bool, Tuple[bool]]
+InputType = Union[torch.Tensor, bool, tuple[bool]]
 
 
 def _matmul_flop_jit(inputs: Tuple[torch.Tensor], _outputs: Tuple[Any]) -> Number:
