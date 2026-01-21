@@ -179,6 +179,10 @@ class FlopTensorDispatchMode(TorchDispatchMode):
     Flop count implementation based on
     https://dev-discuss.pytorch.org/t/the-ideal-pytorch-flop-counter-with-torch-dispatch/505
 
+    Note that not all operators are supported.
+    Unsupported operations will be logged as debug messages but will not contribute
+    to the FLOP count.
+
     Examples::
 
         >>> import copy
