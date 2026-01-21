@@ -20,6 +20,7 @@ We offer several pre-written callbacks which are ready to be used out of the box
     :template: class_template.rst
 
     BaseCSVWriter
+    DataloaderProfiler
     EarlyStopping
     GarbageCollector
    IterationTimeLogger
