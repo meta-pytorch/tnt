@@ -66,6 +66,82 @@ Or you can manually set this using `FSDP.set_state_dict_type <https://pytorch.or
         callbacks=[dcp]
     )
 
+If you are training only a subset of parameters, and want to save only those subset of weights, you must wrap your fsdp module in a checkpoint wrapper that removes the keys when ``state_dict`` is called. An example wrapper may look like this
+
+.. code-block:: python
+
+    class FSDPCheckpointWrapper(nn.Module):
+        """
+        Wrapper around FSDP modules that allows us to augment their state_dicts
+        prior to checkpointing.
+        """
+
+        def __init__(self, fsdp_module, drops: List[str]):
+            super().__init__()
+            self.fsdp_module = fsdp_module
+            self.drops = drops
+
+        def forward(self, *args, **kwargs):
+            return self.fsdp_module.forward(*args, **kwargs)
+
+        def __getattr__(self, name: str):
+            """
+            Forward missing attributes to the wrapped module.
+            """
+
+            try:
+                # defer to nn.Module's logic
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self.fsdp_module, name)
+
+        def __getitem__(self, key: int):
+            """
+            Forward indexing calls in case the module is an ``nn.Sequential``.
+            """
+
+            return self.fsdp_module.__getitem__(key)
+
+        def state_dict(self):
+            state_dict = self.fsdp_module.state_dict()
+
+            state_dict_keys = list(state_dict.keys())
+            for key in state_dict_keys:
+                if not any(drop in key for drop in self.drops):
+                    continue
+                else:
+                    state_dict.pop(key)
+            return state_dict
+
+If using the :class:`~torchtnt.framework.auto_unit.AutoUnit`'s strategy to setup your module with FSDP, you will need to wrap this ``FSDPCheckpointWrapper`` on the unit's module after the parent constructor is called.
+
+.. code-block:: python
+
+    class YourAutoUnit(AutoUnit):
+
+        def __init__(self, module, strategy, ...):
+            # assuming FSDPStrategy is passed in, this will setup FSDP on the module
+            super().__init__(module, strategy, ...)
+
+            # after module has been FSDP wrapped, we wrap FSDPCheckpointWrapper now
+            self.module = FSDPCheckpointWrapper(self.module, drop=[...])
+
+This will ensure you can drop keys of unneeded weights. To load this checkpoint, ensure ``strict`` is set to False.
+
+.. code-block:: python
+
+    app_state = ...
+    snapshot = Snapshot(path=dirpath)
+    snapshot.restore(app_state, strict=False)
+
+Loading State Dict Directly
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If needing to load the state dict of a module directly, you can do the following:
+
+.. code-block:: python
+
+    snapshot = Snapshot(path=dirpath)
+    state_dict = snapshot.get_state_dict_for_key(key="module")  # replace with the attribute name which stores your module. It is `module` for all AutoUnit derived units
 
 Finetuning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
