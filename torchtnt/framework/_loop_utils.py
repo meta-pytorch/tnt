@@ -11,14 +11,27 @@ from typing import Dict, Iterable, Optional, Protocol, runtime_checkable, TypeVa
 
 import torch
 import torch.nn as nn
-import torchao
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 _EXPORT_UTILS_AVAIL = True
 try:
+    from torchao.quantization.pt2e import (
+        move_exported_model_to_eval,
+        move_exported_model_to_train,
+    )
     from torchao.quantization.pt2e.export_utils import model_is_exported
 except Exception:
     _EXPORT_UTILS_AVAIL = False
+
+    def model_is_exported(model: nn.Module) -> bool:
+        return False
+
+    def move_exported_model_to_eval(model: nn.Module) -> None:
+        pass
+
+    def move_exported_model_to_train(model: nn.Module) -> None:
+        pass
+
 
 from torchtnt.utils.progress import Progress
 
@@ -102,9 +115,7 @@ def _set_module_training_mode(
             else module
         ):
             move_fn = (
-                torchao.quantization.pt2e.move_exported_model_to_train
-                if mode
-                else torchao.quantization.pt2e.move_exported_model_to_eval
+                move_exported_model_to_train if mode else move_exported_model_to_eval
             )
             # pyre-fixme[6]: For 1st argument expected `GraphModule` but got
             #  `Union[Module, Tensor]`.
@@ -137,9 +148,9 @@ def _reset_module_training_mode(
                 else module
             ):
                 move_fn = (
-                    torchao.quantization.pt2e.move_exported_model_to_train
+                    move_exported_model_to_train
                     if prior_modes[name]
-                    else torchao.quantization.pt2e.move_exported_model_to_eval
+                    else move_exported_model_to_eval
                 )
                 # pyre-fixme[6]: For 1st argument expected `GraphModule` but got
                 #  `Union[Module, Tensor]`.
