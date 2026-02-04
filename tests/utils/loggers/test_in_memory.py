@@ -27,7 +27,7 @@ class InMemoryLoggerTest(unittest.TestCase):
             logger.flush()
         out = cast(StringIO, out)
         err = cast(StringIO, err)
-        self.assertTrue(out.getvalue().startswith("OrderedDict(["))
+        self.assertTrue(out.getvalue().startswith("OrderedDict("))
         self.assertEqual(err.getvalue(), "")
         logger.log_dict(payload={"metric2": 1.0, "metric3": 2.0}, step=3)
         # Check the buffer directly.
@@ -47,7 +47,7 @@ class InMemoryLoggerTest(unittest.TestCase):
             logger.flush()
         out = cast(StringIO, out)
         err = cast(StringIO, err)
-        self.assertTrue(out.getvalue().startswith("OrderedDict(["))
+        self.assertTrue(out.getvalue().startswith("OrderedDict("))
         self.assertEqual(err.getvalue(), "")
         # Closing the log clears the buffer.
         logger.close()
