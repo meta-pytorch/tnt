@@ -722,7 +722,7 @@ class AutoUnit(
                     loss, outputs = self.compute_loss(state, data)
 
             # normalize loss to account for gradient accumulation
-            loss = loss / self.gradient_accumulation_steps
+            loss = self._normalize_loss_for_gradient_accumulation(loss)
 
             try:
                 from torch._dynamo.utils import maybe_enable_compiled_autograd
@@ -758,6 +758,15 @@ class AutoUnit(
         results = TrainStepResults(loss, total_grad_norm, outputs)
         self.on_train_step_end(state, data, step, results)
         return loss, outputs
+
+    def _normalize_loss_for_gradient_accumulation(
+        self, loss: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Normalize the loss to account for gradient accumulation.
+        Subclasses may override this to implement custom normalization strategies
+        """
+        return loss / self.gradient_accumulation_steps
 
     def on_train_step_end(
         self,
