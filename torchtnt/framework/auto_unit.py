@@ -591,12 +591,6 @@ class AutoUnit(
         self.zero_grad_at_train_step_start: bool = zero_grad_at_train_step_start
         # keep track of when to zero grad at train step start
         self._weight_updated_in_prev_step = False
-
-        if enable_loss_parallel:
-            if not isinstance(strategy, TPStrategy):
-                raise ValueError(
-                    "enable_loss_parallel is only supported with TPStrategy"
-                )
         # pyre-fixme[24]: Attribute must be annotated.
         self.maybe_loss_parallel: Callable = (
             loss_parallel if enable_loss_parallel else contextlib.nullcontext
