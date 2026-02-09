@@ -8,8 +8,8 @@
 # pyre-strict
 
 import platform
+from importlib.metadata import version as get_pkg_version
 
-import pkg_resources
 import torch
 from packaging.version import Version
 
@@ -48,8 +48,8 @@ def get_torch_version() -> Version:
         if hasattr(torch, "__version__"):
             pkg_version = Version(torch.__version__)
         else:
-            # try pkg_resources to infer version
-            pkg_version = Version(pkg_resources.get_distribution("torch").version)
+            # try importlib.metadata to infer version
+            pkg_version = Version(get_pkg_version("torch"))
     except TypeError as e:
         raise TypeError("PyTorch version could not be detected automatically.") from e
 
