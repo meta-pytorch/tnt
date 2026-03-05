@@ -381,7 +381,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
 
         with get_or_create_gloo_pg(candidate_pg=process_group) as pg:
             dcp.load(
-                {"app_state": MultiStateful(app_state)},
+                {"app_state": MultiStateful(app_state, strict=restore_options.strict)},
                 checkpoint_id=checkpoint_id,
                 storage_reader=storage_reader,
                 planner=planner,
