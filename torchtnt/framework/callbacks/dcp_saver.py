@@ -220,7 +220,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         computes and logs the time spent waiting on the previous checkpoint to finish, and a toggable warning
         for the user to modify checkpointing frequency.
 
-        If the previous checkpoing has already finished, this is a no-op.
+        If the previous checkpoint has already finished, this is a no-op.
 
         Args:
             log_warning: Toggle for logging a warning to the user to modify checkpointing frequency. Sometimes
@@ -322,7 +322,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                             Note: If torch.distributed is available and a process group is initialized, dcp assumes the intention is to save/load checkpoints in distributed fashion.
             restore_options: Controls what to  filter when restoring the state.
             knob_options: Additional keyword options for StorageWriter and StorageReader
-            planner: Instance of LoadPlanner. If this is not specificed, the default planner will be used. (Default: ``None``)
+            planner: Instance of LoadPlanner. If this is not specified, the default planner will be used. (Default: ``None``)
             storage_reader: Instance of StorageReader used to perform reads. If this is not specified, it will automatically infer
                             the reader based on the checkpoint_id. If checkpoint_id is also None, an exception will be raised. (Default: ``None``)
         """
@@ -418,7 +418,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                 ignore_phases.add(phase)
 
             elif not isinstance(dl, Stateful):
-                logger.warn(
+                logger.warning(
                     f"dataloader for {phase} phase was passed to `restore` but it does not implement the Stateful protocol to load states"
                 )
                 ignore_phases.add(phase)
@@ -447,7 +447,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
             for phase in candidate_dataloaders.keys()
             if _PHASE_DL_STATE_KEY_MAPPING[phase] not in app_state
         ]:
-            logger.warn(
+            logger.warning(
                 f"dataloader ({','.join(str(k) for k in dl_missing_in_ckpt)}) was passed to `restore` "
                 "but no dataloader exists in checkpoint metadata."
             )
