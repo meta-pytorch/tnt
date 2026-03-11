@@ -7,6 +7,7 @@
 # pyre-strict
 
 from .base_csv_writer import BaseCSVWriter
+from .dataloader_profiler import DataloaderProfiler
 from .dcp_saver import DistributedCheckpointSaver
 from .early_stopping import EarlyStopping
 from .empty_cuda_cache import EmptyCudaCache
@@ -33,6 +34,7 @@ from .train_progress_monitor import TrainProgressMonitor
 
 __all__ = [
     "BaseCSVWriter",
+    "DataloaderProfiler",
     "EarlyStopping",
     "EmptyCudaCache",
     "EnableTensorFloat32",
