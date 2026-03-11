@@ -32,11 +32,26 @@ logger: logging.Logger = logging.getLogger(__name__)
 @dataclass
 class MetricData:
     """
-    Representation of a metric instance. Should provide both a metric name and it's value.
+    Representation of a metric instance. Should provide both a metric name and its value.
+
+    Note: The metric name is sanitized by replacing '/' with '_' to prevent potential issues
+        when using the name as a path or identifier.
     """
 
     name: str
     value: float
+
+    def __init__(self, name: str, value: float) -> None:
+        self.name = MetricData.sanitize_metric_name(name)
+        self.value = value
+
+    @classmethod
+    def sanitize_metric_name(cls, name: str) -> str:
+        """
+        Sanitizes a metric name by replacing '/' with '_'.
+        This is done to prevent potential issues when using the name as a path or identifier.
+        """
+        return name.replace("/", "_")
 
 
 @dataclass
@@ -485,9 +500,14 @@ class CheckpointManager:
                 self._best_checkpoint_config
             ), "Attempted to get a checkpoint with metric but best checkpoint config is not set"
 
-            assert self._best_checkpoint_config.monitored_metric == metric_data.name, (
+            assert (
+                MetricData.sanitize_metric_name(
+                    self._best_checkpoint_config.monitored_metric
+                )
+                == metric_data.name
+            ), (
                 f"Attempted to get a checkpoint with metric '{metric_data.name}', "
-                f"but best checkpoint config is for '{none_throws(self._best_checkpoint_config).monitored_metric}'"
+                f"but best checkpoint config is for '{MetricData.sanitize_metric_name(none_throws(self._best_checkpoint_config).monitored_metric)}'"
             )
 
         checkpoint_path = CheckpointPath(
@@ -819,7 +839,8 @@ def _retrieve_checkpoint_dirpaths(
 
         # If a metric was provided, keep only the checkpoints tracking it
         if metric_name and not (
-            ckpt.metric_data and ckpt.metric_data.name == metric_name
+            ckpt.metric_data
+            and ckpt.metric_data.name == MetricData.sanitize_metric_name(metric_name)
         ):
             continue
 
