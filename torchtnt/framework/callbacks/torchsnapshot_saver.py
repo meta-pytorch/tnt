@@ -221,6 +221,10 @@ class TorchSnapshotSaver(BaseCheckpointer):
         if self._replicated == {"**"}:
             replicated = _exclude_progress_from_replicated(app_state)
 
+        replicated = self._replicated
+        if self._replicated == {"**"}:
+            replicated = _exclude_progress_from_replicated(app_state)
+
         with _override_knobs(self._knob_options):
             self._prev_snapshot = Snapshot.async_take(
                 str(snapshot_path),
