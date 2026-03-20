@@ -13,7 +13,7 @@ from unittest.mock import Mock
 
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import State
-from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit
+from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTestUnit, TTrainUnit
 from torchtnt.utils.event_handlers import log_interval
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -92,6 +92,16 @@ def _get_implemented_callback_mapping(
         "on_predict_step_end",
         "on_predict_epoch_end",
         "on_predict_end",
+        "on_test_start",
+        "on_test_epoch_start",
+        "on_test_dataloader_iter_creation_start",
+        "on_test_dataloader_iter_creation_end",
+        "on_test_get_next_batch_start",
+        "on_test_get_next_batch_end",
+        "on_test_step_start",
+        "on_test_step_end",
+        "on_test_epoch_end",
+        "on_test_end",
     )
     cb_overrides: Dict[str, List[Callback]] = {}
     for hook in callback_hooks:
@@ -117,7 +127,7 @@ class CallbackHandler:
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         fn_name = "on_exception"
@@ -319,3 +329,67 @@ class CallbackHandler:
         callbacks = self._callbacks.get(fn_name, [])
         for cb in callbacks:
             cb.on_predict_end(state, unit)
+
+    def on_test_start(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_start"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_start(state, unit)
+
+    def on_test_epoch_start(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_epoch_start"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_epoch_start(state, unit)
+
+    def on_test_dataloader_iter_creation_start(
+        self, state: State, unit: TTestUnit
+    ) -> None:
+        fn_name = "on_test_dataloader_iter_creation_start"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_dataloader_iter_creation_start(state, unit)
+
+    def on_test_dataloader_iter_creation_end(
+        self, state: State, unit: TTestUnit
+    ) -> None:
+        fn_name = "on_test_dataloader_iter_creation_end"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_dataloader_iter_creation_end(state, unit)
+
+    def on_test_get_next_batch_start(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_get_next_batch_start"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_get_next_batch_start(state, unit)
+
+    def on_test_get_next_batch_end(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_get_next_batch_end"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_get_next_batch_end(state, unit)
+
+    def on_test_step_start(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_step_start"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_step_start(state, unit)
+
+    def on_test_step_end(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_step_end"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_step_end(state, unit)
+
+    def on_test_epoch_end(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_epoch_end"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_epoch_end(state, unit)
+
+    def on_test_end(self, state: State, unit: TTestUnit) -> None:
+        fn_name = "on_test_end"
+        callbacks = self._callbacks.get(fn_name, [])
+        for cb in callbacks:
+            cb.on_test_end(state, unit)

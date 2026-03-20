@@ -291,6 +291,7 @@ class _OnExceptionMixin:
 TTrainData = TypeVar("TTrainData")
 TEvalData = TypeVar("TEvalData")
 TPredictData = TypeVar("TPredictData")
+TTestData = TypeVar("TTestData")
 
 
 class TrainUnit(AppStateMixin, _OnExceptionMixin, Generic[TTrainData], ABC):
@@ -660,6 +661,120 @@ class PredictUnit(
         return cast(TPredictData, next(data_iter))
 
 
+class TestUnit(
+    AppStateMixin,
+    _OnExceptionMixin,
+    Generic[TTestData],
+    ABC,
+):
+    """
+    The TestUnit is an interface that can be used to organize your testing logic. The core of it is the ``test_step`` which
+    is an abstract method where you can define the code you want to run each iteration of the dataloader.
+
+    Unlike :class:`~torchtnt.framework.unit.PredictUnit` which only runs forward passes, TestUnit is designed for
+    evaluation on held-out test data with loss/metrics computation, similar to :class:`~torchtnt.framework.unit.EvalUnit`.
+
+    To use the TestUnit, create a class which subclasses :class:`~torchtnt.framework.unit.TestUnit`.
+    Then implement the ``test_step`` method on your class, and then you can optionally implement any of the hooks which allow you to control the behavior of the loop at different points.
+    In addition, you can override ``get_next_test_batch`` to modify the default batch fetching behavior.
+    Below is a simple example of a user's subclass of :class:`~torchtnt.framework.unit.TestUnit` that implements a basic ``test_step``.
+
+    .. code-block:: python
+
+      from torchtnt.framework.unit import TestUnit
+
+      Batch = Tuple[torch.tensor, torch.tensor]
+      # specify type of the data in each batch of the dataloader to allow for typechecking
+
+      class MyTestUnit(TestUnit[Batch]):
+          def __init__(
+              self,
+              module: torch.nn.Module,
+          ):
+              super().__init__()
+              self.module = module
+
+          def test_step(self, state: State, data: Batch) -> None:
+              inputs, targets = data
+              outputs = self.module(inputs)
+              loss = torch.nn.functional.binary_cross_entropy_with_logits(outputs, targets)
+
+      test_unit = MyTestUnit(module=...)
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.test_progress = Progress()
+        self._test_step_requires_iterator: bool = _step_requires_iterator(
+            self.test_step
+        )
+
+    def on_test_start(self, state: State) -> None:
+        """Hook called before testing starts.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+        """
+        pass
+
+    def on_test_epoch_start(self, state: State) -> None:
+        """Hook called before a test epoch starts.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+        """
+        pass
+
+    @abstractmethod
+    def test_step(self, state: State, data: TTestData) -> Any:
+        """
+        Core required method for user to implement. This method will be called at each iteration of the
+        test dataloader, and can return any data the user wishes.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+            data: one batch of test data.
+        """
+        ...
+
+    def on_test_epoch_end(self, state: State) -> None:
+        """Hook called after a test epoch ends.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+        """
+        pass
+
+    def on_test_end(self, state: State) -> None:
+        """Hook called after testing ends.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+        """
+        pass
+
+    def get_next_test_batch(
+        self,
+        state: State,
+        data_iter: Iterator[object],
+    ) -> Union[Iterator[TTestData], TTestData]:
+        """
+        Returns the next batch of data to be passed into the test step. If the test step requires an iterator as input, this function should return the iterator. Otherwise, this function should return the next batch of data.
+
+        Args:
+            state: a :class:`~torchtnt.framework.state.State` object containing metadata about the test run.
+            data_iter: the iterator over the test dataset.
+
+        Returns:
+            Either the next batch of test data or the iterator over the test dataset.
+        """
+        if self._test_step_requires_iterator:
+            return cast(Iterator[TTestData], data_iter)
+
+        return cast(TTestData, next(data_iter))
+
+
 TTrainUnit = TrainUnit[TTrainData]
 TEvalUnit = EvalUnit[TEvalData]
 TPredictUnit = PredictUnit[TPredictData]
+TTestUnit = TestUnit[TTestData]

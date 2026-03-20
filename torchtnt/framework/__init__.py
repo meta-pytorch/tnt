@@ -12,8 +12,18 @@ from .evaluate import evaluate
 from .fit import fit
 from .predict import predict
 from .state import ActivePhase, EntryPoint, PhaseState, State
+from .test import test
 from .train import train
-from .unit import EvalUnit, PredictUnit, TEvalUnit, TPredictUnit, TrainUnit, TTrainUnit
+from .unit import (
+    EvalUnit,
+    PredictUnit,
+    TestUnit,
+    TEvalUnit,
+    TPredictUnit,
+    TrainUnit,
+    TTestUnit,
+    TTrainUnit,
+)
 
 __all__ = [
     "AutoPredictUnit",
@@ -22,6 +32,7 @@ __all__ = [
     "evaluate",
     "fit",
     "predict",
+    "test",
     "ActivePhase",
     "EntryPoint",
     "PhaseState",
@@ -31,6 +42,8 @@ __all__ = [
     "PredictUnit",
     "TEvalUnit",
     "TPredictUnit",
+    "TestUnit",
+    "TTestUnit",
     "TrainUnit",
     "TTrainUnit",
 ]

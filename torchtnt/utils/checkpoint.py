@@ -58,6 +58,7 @@ class Phase(Enum):
     TRAIN = 1
     EVALUATE = 2
     PREDICT = 3
+    TEST = 4
 
     def __str__(self) -> str:
         return self.name.lower()

@@ -34,7 +34,13 @@ from torch.distributed.tensor.parallel.loss import loss_parallel
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.swa_utils import SWALR
 from torchtnt.framework.state import ActivePhase, EntryPoint, State
-from torchtnt.framework.unit import EvalUnit, PredictUnit, TPredictData, TrainUnit
+from torchtnt.framework.unit import (
+    EvalUnit,
+    PredictUnit,
+    TestUnit,
+    TPredictData,
+    TrainUnit,
+)
 from torchtnt.framework.utils import get_timing_context
 from torchtnt.utils.device import copy_data_to_device
 from torchtnt.utils.device_mesh import GlobalMeshCoordinator
@@ -218,6 +224,7 @@ class _AutoUnitMixin(Generic[TData]):
             ActivePhase.TRAIN: None,
             ActivePhase.EVALUATE: None,
             ActivePhase.PREDICT: None,
+            ActivePhase.TEST: None,
         }
 
         # dict mapping phase to whether the next batch for that phase has been prefetched and is ready to be used
@@ -225,6 +232,7 @@ class _AutoUnitMixin(Generic[TData]):
             ActivePhase.TRAIN: False,
             ActivePhase.EVALUATE: False,
             ActivePhase.PREDICT: False,
+            ActivePhase.TEST: False,
         }
         # whether the current batch is the last train batch
         self._is_last_batch: bool = False
@@ -423,13 +431,15 @@ class AutoUnit(
     TrainUnit[TData],
     EvalUnit[TData],
     PredictUnit[TData],
+    TestUnit[TData],
     metaclass=_ConfigureOptimizersCaller,
 ):
     """
     The AutoUnit is a convenience for users who are training with stochastic gradient descent and would like to have model optimization
     and data parallel replication handled for them.
-    The AutoUnit subclasses :class:`~torchtnt.framework.unit.TrainUnit`, :class:`~torchtnt.framework.unit.EvalUnit`, and
-    :class:`~torchtnt.framework.unit.PredictUnit` and implements the ``train_step``, ``eval_step``, and ``predict_step`` methods for the user.
+    The AutoUnit subclasses :class:`~torchtnt.framework.unit.TrainUnit`, :class:`~torchtnt.framework.unit.EvalUnit`,
+    :class:`~torchtnt.framework.unit.PredictUnit`, and :class:`~torchtnt.framework.unit.TestUnit` and implements the ``train_step``,
+    ``eval_step``, ``predict_step``, and ``test_step`` methods for the user.
 
     For the ``train_step`` it runs:
 
@@ -437,7 +447,7 @@ class AutoUnit(
     - backward pass
     - optimizer step
 
-    For the ``eval_step`` it only runs forward and loss computation.
+    For the ``eval_step`` and ``test_step`` it only runs forward and loss computation.
 
     For the ``predict_step`` it only runs forward computation.
 
@@ -447,6 +457,7 @@ class AutoUnit(
     - ``on_train_step_end``
     - ``on_eval_step_end``
     - ``on_predict_step_end``
+    - ``on_test_step_end``
 
     The user can also override the LR step method, ``step_lr_scheduler``, in case they want to have custom logic.
 
@@ -652,11 +663,11 @@ class AutoUnit(
     @abstractmethod
     def compute_loss(self, state: State, data: TData) -> Tuple[torch.Tensor, Any]:
         """
-        The user should implement this method with their loss computation. This will be called every ``train_step``/``eval_step``.
+        The user should implement this method with their loss computation. This will be called every ``train_step``/``eval_step``/``test_step``.
 
         Args:
-            state: a State object which is passed from the ``train_step``/``eval_step``
-            data: a batch of data which is passed from the ``train_step``/``eval_step``
+            state: a State object which is passed from the ``train_step``/``eval_step``/``test_step``
+            data: a batch of data which is passed from the ``train_step``/``eval_step``/``test_step``
 
         Returns:
             Tuple containing the loss and the output of the model
@@ -858,6 +869,36 @@ class AutoUnit(
         """
         pass
 
+    def test_step(self, state: State, data: TData) -> Tuple[torch.Tensor, Any]:
+        with self.maybe_autocast_precision:
+            with get_timing_context(state, f"{self.__class__.__name__}.compute_loss"):
+                loss, outputs = self.compute_loss(state, data)
+
+        step = self.test_progress.num_steps_completed
+        self.on_test_step_end(state, data, step, loss, outputs)
+        return loss, outputs
+
+    def on_test_step_end(
+        self,
+        state: State,
+        data: TData,
+        step: int,
+        loss: torch.Tensor,
+        outputs: Any,
+    ) -> None:
+        """
+        This will be called at the end of every ``test_step`` before returning. The user can implement this method with code to update and log their metrics,
+        or do anything else.
+
+        Args:
+            state: a State object which is passed from the ``test_step``
+            data: a batch of data which is passed from the ``test_step``
+            step: how many ``test_step`` s have been completed
+            loss: the loss computed in the ``compute_loss`` function
+            outputs: the outputs of the model forward pass
+        """
+        pass
+
     def step_lr_scheduler(self) -> None:
         """
         LR step method extracted to a method in case the user wants to override
@@ -972,6 +1013,14 @@ class AutoUnit(
     ) -> Union[Iterator[TData], TData]:
         # Override the default behavior from PredictUnit in order to enable prefetching if possible.
         if self._predict_step_requires_iterator:
+            return data_iter
+        return self._get_next_batch(state, data_iter)
+
+    def get_next_test_batch(
+        self, state: State, data_iter: Iterator[TData]
+    ) -> Union[Iterator[TData], TData]:
+        # Override the default behavior from TestUnit in order to enable prefetching if possible.
+        if self._test_step_requires_iterator:
             return data_iter
         return self._get_next_batch(state, data_iter)
 
