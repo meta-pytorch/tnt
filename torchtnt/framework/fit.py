@@ -9,15 +9,19 @@
 import logging
 from typing import Iterable, List, Optional
 
+import torch
 from torchtnt.framework._callback_handler import CallbackHandler
 from torchtnt.framework._loop_utils import _log_api_usage
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import EntryPoint, PhaseState, State
+from torchtnt.framework.test import _test_impl
 from torchtnt.framework.train import _train_impl
 from torchtnt.framework.unit import (
     EvalUnit,
+    TestUnit,
     TEvalData,
     TrainUnit,
+    TTestData,
     TTrainData,
     TTrainUnit,
 )
@@ -39,10 +43,12 @@ def fit(
     evaluate_every_n_epochs: Optional[int] = 1,
     callbacks: Optional[List[Callback]] = None,
     timer: Optional[TimerProtocol] = None,
+    test_dataloader: Optional[Iterable[TTestData]] = None,
+    max_test_steps: Optional[int] = None,
 ) -> None:
     """
     The ``fit`` entry point interleaves training and evaluation loops. The ``fit`` entry point takes in an object which subclasses both :class:`~torchtnt.framework.unit.TrainUnit` and :class:`~torchtnt.framework.unit.EvalUnit`, train and eval dataloaders (any Iterables), optional arguments to modify loop execution,
-    and runs the fit loop.
+    and runs the fit loop. Optionally, a test dataloader can be provided to run a test phase after training completes.
 
     Args:
         unit: an instance that subclasses both :class:`~torchtnt.framework.unit.TrainUnit` and :class:`~torchtnt.framework.unit.EvalUnit`,
@@ -57,6 +63,8 @@ def fit(
         evaluate_every_n_epochs: how often to run the evaluation loop in terms of training epochs.
         callbacks: an optional list of callbacks.
         timer: an optional Timer which will be used to time key events (using a Timer with CUDA synchronization may degrade performance).
+        test_dataloader: an optional dataloader to be used during testing after training completes.
+        max_test_steps: the max number of steps to run for testing. None means test until ``test_dataloader`` is exhausted.
 
     Below is an example of calling :py:func:`~torchtnt.framework.fit`.
 
@@ -101,6 +109,10 @@ def fit(
         raise TypeError("Expected unit to implement TrainUnit interface.")
     if not isinstance(unit, EvalUnit):
         raise TypeError("Expected unit to implement EvalUnit interface.")
+    if test_dataloader is not None and not isinstance(unit, TestUnit):
+        raise TypeError(
+            "Expected unit to implement TestUnit interface when test_dataloader is provided."
+        )
 
     callback_handler = CallbackHandler(callbacks or [])
     state = State(
@@ -117,6 +129,14 @@ def fit(
             evaluate_every_n_steps=evaluate_every_n_steps,
             evaluate_every_n_epochs=evaluate_every_n_epochs,
         ),
+        test_state=(
+            PhaseState(
+                dataloader=test_dataloader,
+                max_steps_per_epoch=max_test_steps,
+            )
+            if test_dataloader is not None
+            else None
+        ),
         timer=timer,
     )
 
@@ -131,6 +151,12 @@ def fit(
 
     try:
         _train_impl(state, unit, callback_handler)
+
+        # Run test phase after training completes, if test_dataloader was provided
+        if test_dataloader is not None:
+            with torch.no_grad():
+                _test_impl(state, unit, callback_handler)
+
         logger.info("Finished fit")
         if state.timer:
             logger.info(get_timer_summary(state.timer))

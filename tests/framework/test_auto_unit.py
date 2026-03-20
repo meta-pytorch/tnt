@@ -705,9 +705,11 @@ class TestAutoUnit(unittest.TestCase):
         train_prefetched: bool = False,
         eval_prefetched: bool = False,
         predict_prefetched: bool = False,
+        test_prefetched: bool = False,
         train_next_batch: Optional[T] = None,
         eval_next_batch: Optional[T] = None,
         predict_next_batch: Optional[T] = None,
+        test_next_batch: Optional[T] = None,
     ) -> None:
         tc = unittest.TestCase()
         tc.assertDictEqual(
@@ -716,6 +718,7 @@ class TestAutoUnit(unittest.TestCase):
                 ActivePhase.TRAIN: train_prefetched,
                 ActivePhase.EVALUATE: eval_prefetched,
                 ActivePhase.PREDICT: predict_prefetched,
+                ActivePhase.TEST: test_prefetched,
             },
         )
         tc.assertDictEqual(
@@ -724,6 +727,7 @@ class TestAutoUnit(unittest.TestCase):
                 ActivePhase.TRAIN: train_next_batch,
                 ActivePhase.EVALUATE: eval_next_batch,
                 ActivePhase.PREDICT: predict_next_batch,
+                ActivePhase.TEST: test_next_batch,
             },
         )
 

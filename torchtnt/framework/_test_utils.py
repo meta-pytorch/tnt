@@ -14,7 +14,7 @@ from torch import nn, Tensor
 from torch.utils.data import DataLoader, Dataset, IterableDataset, TensorDataset
 from torchtnt.framework.auto_unit import AutoUnit
 from torchtnt.framework.state import EntryPoint, PhaseState, State
-from torchtnt.framework.unit import EvalUnit, PredictUnit, TrainUnit
+from torchtnt.framework.unit import EvalUnit, PredictUnit, TestUnit, TrainUnit
 from torchtnt.utils.lr_scheduler import TLRScheduler
 
 Batch = Tuple[torch.Tensor, torch.Tensor]
@@ -50,6 +50,19 @@ def get_dummy_predict_state(dataloader: Optional[Iterable[object]] = None) -> St
     return State(
         entry_point=EntryPoint.PREDICT,
         predict_state=PhaseState(
+            dataloader=dataloader or [1, 2, 3, 4],
+            max_epochs=1,
+            max_steps=1,
+            max_steps_per_epoch=1,
+        ),
+        timer=None,
+    )
+
+
+def get_dummy_test_state(dataloader: Optional[Iterable[object]] = None) -> State:
+    return State(
+        entry_point=EntryPoint.TEST,
+        test_state=PhaseState(
             dataloader=dataloader or [1, 2, 3, 4],
             max_epochs=1,
             max_steps=1,
@@ -104,6 +117,21 @@ class DummyPredictUnit(PredictUnit[Batch]):
 
         outputs = self.module(inputs)
         return outputs
+
+
+class DummyTestUnit(TestUnit[Batch]):
+    def __init__(self, input_dim: int) -> None:
+        super().__init__()
+        # initialize module & loss_fn
+        self.module = nn.Linear(input_dim, 2)
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def test_step(self, state: State, data: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs, targets = data
+
+        outputs = self.module(inputs)
+        loss = self.loss_fn(outputs, targets)
+        return loss, outputs
 
 
 class DummyTrainUnit(TrainUnit[Batch]):
@@ -190,6 +218,45 @@ class DummyFitUnit(TrainUnit[Batch], EvalUnit[Batch]):
         return loss, outputs
 
     def eval_step(self, state: State, data: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs, targets = data
+
+        outputs = self.module(inputs)
+        loss = self.loss_fn(outputs, targets)
+        return loss, outputs
+
+
+class DummyFitTestUnit(TrainUnit[Batch], EvalUnit[Batch], TestUnit[Batch]):
+    def __init__(self, input_dim: int) -> None:
+        super().__init__()
+        # initialize module, loss_fn, & optimizer
+        self.module = nn.Linear(input_dim, 2)
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.optimizer = torch.optim.SGD(
+            self.module.parameters(), lr=0.01, foreach=True
+        )
+
+    def train_step(
+        self, state: State, data: Batch
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs, targets = data
+
+        outputs = self.module(inputs)
+        loss = self.loss_fn(outputs, targets)
+        loss.backward()
+
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+
+        return loss, outputs
+
+    def eval_step(self, state: State, data: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs, targets = data
+
+        outputs = self.module(inputs)
+        loss = self.loss_fn(outputs, targets)
+        return loss, outputs
+
+    def test_step(self, state: State, data: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs, targets = data
 
         outputs = self.module(inputs)

@@ -744,6 +744,7 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
                 "train_progress",
                 "eval_progress",
                 "predict_progress",  # included because of AutoUnit
+                "test_progress",  # included because of AutoUnit
                 "output_mean",
             ]
 
@@ -830,6 +831,7 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
                 "train_progress",
                 "eval_progress",
                 "predict_progress",  # included because of AutoUnit
+                "test_progress",  # included because of AutoUnit
                 "output_mean",
                 "eval_dataloader",
                 "train_dataloader",
@@ -933,6 +935,7 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
                 "train_progress",
                 "eval_progress",
                 "predict_progress",  # included because of AutoUnit
+                "test_progress",  # included because of AutoUnit
                 "output_mean",
             ]
 

@@ -9,7 +9,7 @@
 from typing import Union
 
 from torchtnt.framework.state import State
-from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit
+from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTestUnit, TTrainUnit
 
 
 class Callback:
@@ -63,7 +63,7 @@ class Callback:
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         """Hook called when an exception occurs."""
@@ -199,4 +199,48 @@ class Callback:
 
     def on_predict_end(self, state: State, unit: TPredictUnit) -> None:
         """Hook called after prediction ends."""
+        pass
+
+    def on_test_start(self, state: State, unit: TTestUnit) -> None:
+        """Hook called before testing starts."""
+        pass
+
+    def on_test_epoch_start(self, state: State, unit: TTestUnit) -> None:
+        """Hook called before a new test epoch starts."""
+        pass
+
+    def on_test_dataloader_iter_creation_start(
+        self, state: State, unit: TTestUnit
+    ) -> None:
+        """Hook called before the dataloader iterator is created."""
+        pass
+
+    def on_test_dataloader_iter_creation_end(
+        self, state: State, unit: TTestUnit
+    ) -> None:
+        """Hook called after the dataloader iterator is created."""
+        pass
+
+    def on_test_get_next_batch_start(self, state: State, unit: TTestUnit) -> None:
+        """Hook called before getting the data batch for the next test step."""
+        pass
+
+    def on_test_get_next_batch_end(self, state: State, unit: TTestUnit) -> None:
+        """Hook called after getting the data batch for the next test step."""
+        pass
+
+    def on_test_step_start(self, state: State, unit: TTestUnit) -> None:
+        """Hook called before a new test step starts."""
+        pass
+
+    def on_test_step_end(self, state: State, unit: TTestUnit) -> None:
+        """Hook called after a test step ends."""
+        pass
+
+    def on_test_epoch_end(self, state: State, unit: TTestUnit) -> None:
+        """Hook called after a test epoch ends."""
+        pass
+
+    def on_test_end(self, state: State, unit: TTestUnit) -> None:
+        """Hook called after testing ends."""
         pass

@@ -36,12 +36,14 @@ class EntryPoint(Enum):
     - :py:func:`~torchtnt.framework.train`
     - :py:func:`~torchtnt.framework.evaluate`
     - :py:func:`~torchtnt.framework.predict`
+    - :py:func:`~torchtnt.framework.test`
     """
 
     FIT = auto()
     TRAIN = auto()
     EVALUATE = auto()
     PREDICT = auto()
+    TEST = auto()
 
 
 class ActivePhase(Enum):
@@ -49,18 +51,20 @@ class ActivePhase(Enum):
 
     This class complements :class:`EntryPoint` by specifying the active phase for each function.
     More than one phase value can be set while a :class:`EntryPoint` is running:
-        - ``EntryPoint.FIT`` - ``ActivePhase.{TRAIN,EVALUATE}``
+        - ``EntryPoint.FIT`` - ``ActivePhase.{TRAIN,EVALUATE,TEST}``
         - ``EntryPoint.TRAIN`` - ``ActivePhase.TRAIN``
         - ``EntryPoint.EVALUATE`` - ``ActivePhase.EVALUATE``
         - ``EntryPoint.PREDICT`` - ``ActivePhase.PREDICT``
+        - ``EntryPoint.TEST`` - ``ActivePhase.TEST``
 
     This can be used within hooks such as :meth:`~torchtnt.framework.unit._OnExceptionMixin.on_exception`
-    to determine within which of training, evaluation, or prediction the hook is being called.
+    to determine within which of training, evaluation, prediction, or testing the hook is being called.
     """
 
     TRAIN = auto()
     EVALUATE = auto()
     PREDICT = auto()
+    TEST = auto()
 
     def into_phase(self) -> Phase:
         """Converts the active phase to the corresponding phase."""
@@ -70,6 +74,8 @@ class ActivePhase(Enum):
             return Phase.EVALUATE
         elif self == ActivePhase.PREDICT:
             return Phase.PREDICT
+        elif self == ActivePhase.TEST:
+            return Phase.TEST
         else:
             raise AssertionError("Should match an ActivePhase")
 
@@ -80,12 +86,14 @@ class ActivePhase(Enum):
             return "eval"
         elif self == ActivePhase.PREDICT:
             return "predict"
+        elif self == ActivePhase.TEST:
+            return "test"
         else:
             raise AssertionError("Should match an ActivePhase")
 
 
 class PhaseState(Generic[TData, TStepOutput]):
-    """State for each phase (train, eval, predict).
+    """State for each phase (train, eval, predict, test).
     Modified by the framework, read-only for the user.
     """
 
@@ -172,7 +180,7 @@ TPhaseState = PhaseState[TData, TStepOutput]
 
 
 class State:
-    """Parent State class which can contain up to 3 instances of PhaseState, for the 3 phases.
+    """Parent State class which can contain up to 4 instances of PhaseState, for the 4 phases.
     Modified by the framework, read-only for the user.
     """
 
@@ -184,23 +192,25 @@ class State:
         train_state: Optional[TPhaseState] = None,
         eval_state: Optional[TPhaseState] = None,
         predict_state: Optional[TPhaseState] = None,
+        test_state: Optional[TPhaseState] = None,
     ) -> None:
         self._entry_point = entry_point
         self._timer = timer
         self._train_state = train_state
         self._eval_state = eval_state
         self._predict_state = predict_state
+        self._test_state = test_state
         self._should_stop: bool = False
         self._active_phase: ActivePhase = ActivePhase.TRAIN
 
     @property
     def entry_point(self) -> EntryPoint:
-        """Entry point used to start loop execution. (One of FIT, TRAIN, EVALUATE, PREDICT)."""
+        """Entry point used to start loop execution. (One of FIT, TRAIN, EVALUATE, PREDICT, TEST)."""
         return self._entry_point
 
     @property
     def active_phase(self) -> ActivePhase:
-        """Current active phase of the loop. (One of TRAIN, EVALUATE, PREDICT)."""
+        """Current active phase of the loop. (One of TRAIN, EVALUATE, PREDICT, TEST)."""
         return self._active_phase
 
     @property
@@ -224,6 +234,11 @@ class State:
         return self._predict_state
 
     @property
+    def test_state(self) -> Optional[TPhaseState]:
+        """A :class:`~torchtnt.framework.state.PhaseState` object which contains meta information about the test phase."""
+        return self._test_state
+
+    @property
     def should_stop(self) -> bool:
         """Read-only property for whether to terminate the loop after the current step completes."""
         return self._should_stop
@@ -241,5 +256,7 @@ class State:
             return none_throws(self._eval_state)
         elif self._active_phase == ActivePhase.PREDICT:
             return none_throws(self._predict_state)
+        elif self._active_phase == ActivePhase.TEST:
+            return none_throws(self._test_state)
         else:
             raise ValueError(f"Invalid active phase: {self._active_phase}")
