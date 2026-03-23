@@ -22,6 +22,7 @@ from torchtnt.framework.unit import (
     TEvalUnit,
     TPredictUnit,
     TrainUnit,
+    TTestUnit,
     TTrainData,
     TTrainUnit,
 )
@@ -35,7 +36,7 @@ class DummyCallback(Callback):
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         self.called_hooks.add("on_exception")
