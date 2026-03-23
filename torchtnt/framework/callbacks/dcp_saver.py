@@ -51,6 +51,7 @@ from torchtnt.framework.unit import (
     TEvalUnit,
     TPredictData,
     TPredictUnit,
+    TTestUnit,
     TTrainData,
     TTrainUnit,
 )
@@ -253,7 +254,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         rank_zero_info("Ensuring previous async checkpoint finished before exiting.")

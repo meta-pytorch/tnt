@@ -26,6 +26,7 @@ from torchtnt.framework.unit import (
     AppStateMixin,
     TEvalUnit,
     TPredictUnit,
+    TTestUnit,
     TTrainData,
     TTrainUnit,
 )
@@ -139,7 +140,7 @@ class TorchSnapshotSaver(BaseCheckpointer):
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         self._wait()

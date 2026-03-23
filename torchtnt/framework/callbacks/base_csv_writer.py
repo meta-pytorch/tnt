@@ -14,7 +14,7 @@ from typing import Any, List, TextIO, Union
 from pyre_extensions import none_throws
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import EntryPoint, State
-from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit
+from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTestUnit, TTrainUnit
 from torchtnt.utils import get_filesystem, get_global_rank
 
 DEFAULT_FILE_NAME = "predictions.csv"
@@ -87,7 +87,7 @@ class BaseCSVWriter(Callback, ABC):
     def on_exception(
         self,
         state: State,
-        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit],
+        unit: Union[TTrainUnit, TEvalUnit, TPredictUnit, TTestUnit],
         exc: BaseException,
     ) -> None:
         if state.entry_point == EntryPoint.PREDICT:
