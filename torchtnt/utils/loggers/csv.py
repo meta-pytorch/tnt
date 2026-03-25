@@ -58,7 +58,11 @@ class CSVLogger(FileLogger, MetricLogger):
                 _write_csv(self.path, data_list)
                 return
 
-            self._thread = Thread(target=_write_csv, args=(self.path, data_list))
+            self._thread = Thread(
+                target=_write_csv,
+                args=(self.path, data_list),
+                name="CSVAsyncWriter",
+            )
             self._thread.start()
 
     def close(self) -> None:
