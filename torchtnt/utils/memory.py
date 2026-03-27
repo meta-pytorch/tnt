@@ -129,6 +129,7 @@ def _get_target_thread(
                 baseline_rss_bytes,
                 stop_event,
             ),
+            name="RSSMemoryMonitor",
         ),
         stop_event,
     )
