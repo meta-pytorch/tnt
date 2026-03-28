@@ -8,10 +8,10 @@
 
 import logging
 from contextlib import contextmanager, nullcontext
-from typing import ContextManager, Generator, Tuple, TypeVar
+from typing import Any, ContextManager, Generator, Tuple, TypeVar
 
 from torch.profiler import record_function
-from torchtnt.framework.state import State
+from torchtnt.framework.state import ActivePhase, State
 
 _logger: logging.Logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -36,3 +36,21 @@ def get_timing_context(
     profiler_context = record_function(event_name)
     with timer_context, profiler_context:
         yield (timer_context, profiler_context)
+
+
+def get_current_step(unit: Any, phase: ActivePhase) -> int:  # type: ignore
+    """
+    For an AutoUnit, gets 0-indexed current step for train, eval, and predict phases.
+
+    Args:
+        unit: an instance of :class:`~torchtnt.framework.auto_unit.AutoUnit`
+        phase: phase for which to retrieve the current step
+    """
+    if phase == ActivePhase.TRAIN:
+        return unit.train_progress.num_steps_completed
+    elif phase == ActivePhase.EVALUATE:
+        return unit.eval_progress.num_steps_completed
+    elif phase == ActivePhase.PREDICT:
+        return unit.predict_progress.num_steps_completed
+    else:
+        raise ValueError(f"Unknown phase: {phase}")
