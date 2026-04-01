@@ -601,6 +601,102 @@ class BaseCheckpointerTest(unittest.TestCase):
                     ],
                 )
 
+    def test_incomplete_epoch_step_end_dedup(self) -> None:
+        """Test dedup when max_steps exits mid-epoch.
+        save_every_n_train_steps=max_steps → step-end saves at step N.
+        increment_epoch inflates epoch. on_train_end detects same step count
+        and skips (train progress unchanged)."""
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_steps = 3
+        # 5 steps/epoch, max_steps=3 → exits mid-epoch
+        # save_every_n_train_steps=3 → step-end saves epoch_0_train_step_3
+        # increment_epoch → epoch_1
+        # on_train_end: train progress unchanged → dedup → skip
+
+        my_unit = DummyTrainUnit(input_dim=input_dim)
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkpoint_cb = BaseCheckpointSaver(
+                temp_dir,
+                save_every_n_train_steps=max_steps,
+            )
+            train(
+                my_unit,
+                dataloader,
+                max_steps=max_steps,
+                callbacks=[checkpoint_cb],
+            )
+
+            step_ckpt = os.path.join(temp_dir, f"epoch_0_train_step_{max_steps}")
+            self.assertTrue(os.path.exists(step_ckpt), f"Expected {step_ckpt}")
+            # Only 1 checkpoint: step-end saves, on_train_end deduped by step count
+            checkpoints = os.listdir(temp_dir)
+            self.assertEqual(len(checkpoints), 1)
+
+    def test_incomplete_epoch_epoch_end_saves(self) -> None:
+        """Test that on_train_epoch_end saves after increment_epoch, and
+        on_train_end is deduped by path (same epoch after increment)."""
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_steps = 3
+        # 5 steps/epoch, max_steps=3 → exits mid-epoch
+        # increment_epoch → epoch_1
+        # save_every_n_epochs=1 → epoch-end saves epoch_1_train_step_3
+        # on_train_end: epoch_1_train_step_3 already exists → path dedup
+
+        my_unit = DummyTrainUnit(input_dim=input_dim)
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkpoint_cb = BaseCheckpointSaver(
+                temp_dir,
+                save_every_n_epochs=1,
+            )
+            train(
+                my_unit,
+                dataloader,
+                max_steps=max_steps,
+                callbacks=[checkpoint_cb],
+            )
+
+            expected_ckpt = os.path.join(temp_dir, f"epoch_1_train_step_{max_steps}")
+            self.assertTrue(os.path.exists(expected_ckpt), f"Expected {expected_ckpt}")
+            # Only 1 checkpoint: epoch-end saves, train-end deduped by path
+            checkpoints = os.listdir(temp_dir)
+            self.assertEqual(len(checkpoints), 1)
+
+    def test_incomplete_epoch_train_end_only(self) -> None:
+        """Test that on_train_end saves when no step-level or epoch-level
+        checkpoints are configured, with max_steps mid-epoch.
+        The checkpoint uses the post-increment epoch."""
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_steps = 3
+        # 5 steps/epoch, max_steps=3 → exits mid-epoch
+        # increment_epoch → epoch_1
+        # No step or epoch checkpoints → only on_train_end saves
+        # No prior checkpoints → step-based dedup doesn't trigger
+
+        my_unit = DummyTrainUnit(input_dim=input_dim)
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkpoint_cb = BaseCheckpointSaver(temp_dir)
+            train(
+                my_unit,
+                dataloader,
+                max_steps=max_steps,
+                callbacks=[checkpoint_cb],
+            )
+
+            expected_ckpt = os.path.join(temp_dir, f"epoch_1_train_step_{max_steps}")
+            self.assertTrue(os.path.exists(expected_ckpt), f"Expected {expected_ckpt}")
+            # Exactly 1 checkpoint from on_train_end
+            checkpoints = os.listdir(temp_dir)
+            self.assertEqual(len(checkpoints), 1)
+
     def test_save_on_train_end_on_fit(self) -> None:
         input_dim = 2
         dataset_len = 10
@@ -759,7 +855,7 @@ class BaseCheckpointerTest(unittest.TestCase):
             dirs = os.listdir(temp_dir)
             self.assertEqual(len(dirs), 1)
             self.assertIn(
-                f"epoch_{max_epochs}_train_step_{dataset_len // batch_size * max_epochs}",
+                f"epoch_{max_epochs - 1}_train_step_{dataset_len // batch_size * max_epochs}",
                 os.listdir(temp_dir),
             )
 

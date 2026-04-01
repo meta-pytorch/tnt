@@ -75,7 +75,6 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
                 f"{temp_dir}/epoch_1_train_step_6",
                 f"{temp_dir}/epoch_1_train_step_8",
                 f"{temp_dir}/epoch_1_train_step_10",
-                f"{temp_dir}/epoch_2_train_step_10",  # extra checkpoint on_train_end
             ]
             dcp_cb = DistributedCheckpointSaver(
                 temp_dir,

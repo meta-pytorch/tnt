@@ -252,10 +252,13 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
                     )
                     return False
 
-                # 2.2) If doing fit without eval checkpointing, only consider training progress when
-                # checking if last checkpoint exists.
+                # 2.2) If doing fit or train without eval checkpointing, only consider
+                # training progress when checking if last checkpoint exists.
+                # TRAIN is included because increment_epoch() inflates the
+                # epoch counter after the last step, producing a different
+                # checkpoint path but identical training state.
                 if (
-                    state.entry_point == EntryPoint.FIT
+                    state.entry_point in (EntryPoint.FIT, EntryPoint.TRAIN)
                     and self._save_every_n_eval_epochs is None
                     and self._checkpoint_manager._ckpt_paths
                     and self._checkpoint_manager._ckpt_paths[-1].step[Phase.TRAIN]

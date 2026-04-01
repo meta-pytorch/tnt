@@ -137,6 +137,14 @@ class TorchSnapshotSaver(BaseCheckpointer):
 
         super().on_train_start(state, unit)
 
+    def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+        # Flush any pending async checkpoint before the base class
+        # decides whether to save a final checkpoint. Without this,
+        # skipping the on_train_end save (e.g. via dedup) would leave
+        # async epoch-end or step-end snapshots unflushed.
+        self._wait()
+        super().on_train_end(state, unit)
+
     def on_exception(
         self,
         state: State,
