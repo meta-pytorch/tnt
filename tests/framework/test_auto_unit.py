@@ -781,6 +781,27 @@ class TestAutoUnit(unittest.TestCase):
 
             auto_unit.train_progress.increment_step()
 
+    @patch("torchtnt.framework.auto_unit._is_fsdp2_module", return_value=True)
+    def test_gradient_accumulation_fsdp2_sync_true(self, _) -> None:
+        """When gradient_accumulation_sync=True, set_requires_gradient_sync
+        should never be called — gradients sync on every micro-batch."""
+        auto_unit = DummyAutoUnit(
+            module=torch.nn.Linear(1, 1),
+            gradient_accumulation_steps=3,
+            gradient_accumulation_sync=True,
+        )
+
+        fsdp_module_mock = MagicMock()
+        auto_unit.module.set_requires_gradient_sync = fsdp_module_mock
+        auto_unit._is_last_batch = False
+
+        state = get_dummy_train_state()
+
+        for _step in range(4):
+            auto_unit.train_step(state, (torch.rand(1, 1), torch.rand(1, 1)))
+            fsdp_module_mock.assert_not_called()
+            auto_unit.train_progress.increment_step()
+
     @patch("torchtnt.framework.auto_unit.prepare_module")
     def test_global_mesh(self, mock_prepare_module: Mock) -> None:
         """

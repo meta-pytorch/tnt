@@ -474,6 +474,11 @@ class AutoUnit(
         step_lr_interval: whether to step lr_scheduler every step or every epoch. Defaults to every epoch.
         precision: the precision to use in training/evaluation (using automatic mixed precision), as either a string or a torch.dtype. Acceptable strings are ``'fp32'``, ``'fp16'``, and ``'bf16'``.
         gradient_accumulation_steps: how many batches to accumulate gradients over.
+        gradient_accumulation_sync: if True, gradients are synchronized (reduce-scatter for FSDP2,
+            all-reduce for DDP) on every micro-batch during gradient accumulation and accumulated in sharded form.
+            This uses more communication but significantly less memory — recommended for large models.
+            If False (default), synchronization is skipped during accumulation micro-batches using ``no_sync`` / ``set_requires_gradient_sync(False)``,
+            which reduces communication but keeps full unsharded gradients in memory.
         detect_anomaly: whether to enable anomaly detection for the autograd engine https://pytorch.org/docs/stable/autograd.html#anomaly-detection
         clip_grad_norm: max norm of the gradients for clipping https://pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_norm_.html
         clip_grad_value: max value of the gradients for clipping https://pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_value_.html
@@ -515,6 +520,7 @@ class AutoUnit(
         step_lr_interval: Literal["step", "epoch"] = "epoch",
         precision: Optional[Union[str, torch.dtype]] = None,
         gradient_accumulation_steps: int = 1,
+        gradient_accumulation_sync: bool = False,
         detect_anomaly: Optional[bool] = None,
         clip_grad_norm: Optional[float] = None,
         clip_grad_value: Optional[float] = None,
@@ -585,6 +591,7 @@ class AutoUnit(
         self.step_lr_interval = step_lr_interval
 
         self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.gradient_accumulation_sync = gradient_accumulation_sync
 
         self.clip_grad_norm = clip_grad_norm
         self.clip_grad_value = clip_grad_value
@@ -697,11 +704,12 @@ class AutoUnit(
         maybe_no_sync = (
             module.no_sync()
             if not should_update_weights
+            and not self.gradient_accumulation_sync
             and (isinstance(module, DDP) or isinstance(module, FSDP))
             else contextlib.nullcontext()
         )
         # fsdp2 has separate way of disabling gradient sync
-        if _is_fsdp2_module(module):
+        if _is_fsdp2_module(module) and not self.gradient_accumulation_sync:
             if not should_update_weights:
                 cast(FSDPModule, module).set_requires_gradient_sync(False)
             elif should_update_weights and self.gradient_accumulation_steps > 1:
