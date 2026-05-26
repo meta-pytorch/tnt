@@ -115,6 +115,96 @@ class TQDMProgressBarTest(unittest.TestCase):
             none_throws(progress_bar._predict_progress_bar).total, expected_total
         )
 
+    def test_progress_bar_train_create_on_step_end_when_epoch_start_skipped(
+        self,
+    ) -> None:
+        """
+        Test that the train progress bar is created on the first on_train_step_end
+        when on_train_epoch_start was skipped (DCP-resume scenario).
+        """
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_epochs = 1
+        expected_total = dataset_len / batch_size
+
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        state = State(
+            entry_point=EntryPoint.TRAIN,
+            train_state=PhaseState(
+                dataloader=dataloader,
+                max_epochs=max_epochs,
+            ),
+        )
+
+        my_unit = DummyTrainUnit(2)
+        progress_bar = TQDMProgressBar()
+        self.assertIsNone(progress_bar._train_progress_bar)
+        progress_bar.on_train_step_end(state, my_unit)
+        self.assertEqual(
+            none_throws(progress_bar._train_progress_bar).total, expected_total
+        )
+
+    def test_progress_bar_evaluate_create_on_step_end_when_epoch_start_skipped(
+        self,
+    ) -> None:
+        """
+        Test that the eval progress bar is created on the first on_eval_step_end
+        when on_eval_epoch_start was skipped (DCP-resume scenario).
+        """
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_epochs = 1
+        expected_total = dataset_len / batch_size
+
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        state = State(
+            entry_point=EntryPoint.EVALUATE,
+            eval_state=PhaseState(
+                dataloader=dataloader,
+                max_epochs=max_epochs,
+            ),
+        )
+
+        my_unit = DummyEvalUnit(2)
+        progress_bar = TQDMProgressBar()
+        self.assertIsNone(progress_bar._eval_progress_bar)
+        progress_bar.on_eval_step_end(state, my_unit)
+        self.assertEqual(
+            none_throws(progress_bar._eval_progress_bar).total, expected_total
+        )
+
+    def test_progress_bar_predict_create_on_step_end_when_epoch_start_skipped(
+        self,
+    ) -> None:
+        """
+        Test that the predict progress bar is created on the first on_predict_step_end
+        when on_predict_epoch_start was skipped (DCP-resume scenario).
+        """
+        input_dim = 2
+        dataset_len = 10
+        batch_size = 2
+        max_epochs = 1
+        expected_total = dataset_len / batch_size
+
+        dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+        state = State(
+            entry_point=EntryPoint.PREDICT,
+            predict_state=PhaseState(
+                dataloader=dataloader,
+                max_epochs=max_epochs,
+            ),
+        )
+
+        my_unit = DummyPredictUnit(2)
+        progress_bar = TQDMProgressBar()
+        self.assertIsNone(progress_bar._predict_progress_bar)
+        progress_bar.on_predict_step_end(state, my_unit)
+        self.assertEqual(
+            none_throws(progress_bar._predict_progress_bar).total, expected_total
+        )
+
     def test_progress_bar_mid_progress(self) -> None:
         """
         Test TQDMProgressBar callback when progress already has occurred (can occur when loading checkpoint)
