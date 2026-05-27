@@ -147,7 +147,7 @@ class MemorySnapshotProfiler(MemorySnapshotProfilerBase):
         if self.is_started:
             return
         if not torch.cuda.is_available():
-            logger.warn("CUDA unavailable. Not recording memory history.")
+            logger.warning("CUDA unavailable. Not recording memory history.")
             return
 
         logger.info("Starting to record memory history.")
@@ -158,7 +158,7 @@ class MemorySnapshotProfiler(MemorySnapshotProfilerBase):
         if not self.is_started:
             return
         if not torch.cuda.is_available():
-            logger.warn("CUDA unavailable. Not recording memory history.")
+            logger.warning("CUDA unavailable. Not recording memory history.")
             return
 
         logger.info("Stopping recording memory history.")
