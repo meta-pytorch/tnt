@@ -39,3 +39,17 @@ We offer several pre-written callbacks which are ready to be used out of the box
     TorchSnapshotSaver
     TQDMProgressBar
     TrainProgressMonitor
+
+.. fbcode::
+
+   .. currentmodule:: torchtnt.meta.framework.callbacks
+
+   .. autosummary::
+      :nosignatures:
+      :toctree: generated/
+      :template: class_template.rst
+
+      BaseHiveWriter
+      ModelStoreCheckpointer
+      StuckJobDetector
+      ZoomerProfiler
