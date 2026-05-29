@@ -48,6 +48,24 @@ def _is_done(
     )
 
 
+def _has_pending_fit_eval(
+    train_progress: Progress,
+    eval_progress: Progress,
+    evaluate_every_n_epochs: Optional[int],
+) -> bool:
+    """For FIT only: returns True iff a scheduled eval epoch was interrupted
+    (e.g. by mid-eval preemption) and ``eval_progress`` lags
+    ``train_progress``. See ``tnt_fit_skips_eval_on_resume.bug.md``.
+    """
+    if not evaluate_every_n_epochs:
+        return False
+    train_epochs = train_progress.num_epochs_completed
+    if train_epochs == 0 or train_epochs % evaluate_every_n_epochs != 0:
+        return False
+    expected_eval_epochs = train_epochs // evaluate_every_n_epochs
+    return eval_progress.num_epochs_completed < expected_eval_epochs
+
+
 def _is_epoch_done(
     progress: Progress, max_steps_per_epoch: Optional[int], max_steps: Optional[int]
 ) -> bool:
