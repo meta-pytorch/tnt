@@ -88,6 +88,7 @@ def _remove_app_state_keys(
     remove_modules: bool = False,
     remove_optimizers: bool = False,
     remove_lr_schedulers: bool = False,
+    remove_metrics: bool = False,
 ) -> None:
     if remove_modules:
         # remove all module keys from app_state
@@ -103,6 +104,11 @@ def _remove_app_state_keys(
         # remove all lr scheduler keys from app_state
         for lr_scheduler_keys in unit.tracked_lr_schedulers().keys():
             app_state.pop(lr_scheduler_keys, None)
+
+    if remove_metrics:
+        # remove all metric keys from app_state
+        for metric_keys in unit.tracked_metrics().keys():
+            app_state.pop(metric_keys, None)
 
 
 def _prepare_app_state_for_checkpoint(
@@ -173,6 +179,7 @@ def _prepare_app_state_for_restore(
         remove_modules=not restore_options.restore_modules,
         remove_optimizers=not restore_options.restore_optimizers,
         remove_lr_schedulers=not restore_options.restore_lr_schedulers,
+        remove_metrics=not restore_options.restore_metrics,
     )
 
     return app_state
