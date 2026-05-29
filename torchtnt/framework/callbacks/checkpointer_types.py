@@ -42,6 +42,7 @@ class RestoreOptions:
         restore_predict_progress: Whether to restore the prediction progress state.
         restore_optimizers: Whether to restore the optimizer states.
         restore_lr_schedulers: Whether to restore the lr scheduler states.
+        restore_metrics: Whether to restore the metric states.
         strict: Whether to strictly restore app state and the module state dict.
         init_optim_states: Whether to initialize the optimizer state. Defaults to True. Toggle off
             if running into issues with loading optimizer state. This will reset optimizer state,
@@ -54,5 +55,6 @@ class RestoreOptions:
     restore_predict_progress: bool = True
     restore_optimizers: bool = True
     restore_lr_schedulers: bool = True
+    restore_metrics: bool = True
     strict: bool = True
     init_optim_states: bool = True
