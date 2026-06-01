@@ -48,6 +48,37 @@ def _is_done(
     )
 
 
+def _has_pending_fit_eval(
+    train_progress: Progress,
+    eval_progress: Progress,
+    evaluate_every_n_epochs: Optional[int],
+    evaluate_every_n_steps: Optional[int],
+) -> bool:
+    """For FIT only: returns True iff a scheduled eval epoch was interrupted
+    (e.g. by mid-eval preemption) and ``eval_progress`` lags
+    ``train_progress``. See ``tnt_fit_skips_eval_on_resume.bug.md``.
+
+    Each call to ``_evaluate_impl`` advances
+    ``eval_progress.num_epochs_completed`` by 1, regardless of whether eval
+    was triggered by ``evaluate_every_n_steps`` (mid-train-epoch) or
+    ``evaluate_every_n_epochs`` (end-of-train-epoch). The expected total is
+    the sum of step-triggered and epoch-triggered fires; a deficit means
+    a preemption interrupted the most recent scheduled eval.
+    """
+    if not evaluate_every_n_epochs and not evaluate_every_n_steps:
+        return False
+    expected_eval_epochs = 0
+    if evaluate_every_n_steps:
+        expected_eval_epochs += (
+            train_progress.num_steps_completed // evaluate_every_n_steps
+        )
+    if evaluate_every_n_epochs:
+        expected_eval_epochs += (
+            train_progress.num_epochs_completed // evaluate_every_n_epochs
+        )
+    return eval_progress.num_epochs_completed < expected_eval_epochs
+
+
 def _is_epoch_done(
     progress: Progress, max_steps_per_epoch: Optional[int], max_steps: Optional[int]
 ) -> bool:

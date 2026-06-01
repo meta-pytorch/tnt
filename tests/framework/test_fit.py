@@ -385,6 +385,111 @@ class FitTest(unittest.TestCase):
         self.assertEqual(mock_get_thread_name.call_count, 2)
         mock_set_thread_name.assert_called_once()
 
+    def test_fit_resume_mid_eval_runs_pending_eval(self) -> None:
+        """
+        Regression test for the ``tnt_fit_skips_eval_on_resume`` bug.
+
+        Simulates a fit job that was preempted mid-eval by pre-populating
+        ``train_progress.num_epochs_completed`` to ``max_epochs`` while
+        leaving ``eval_progress.num_epochs_completed`` one step behind. The
+        outer fit loop's ``_is_done`` check exits the train loop immediately
+        in this state; the post-loop catch-up in ``_train_impl`` should
+        then detect the pending eval and run it to completion before
+        ``on_train_end`` fires.
+        """
+        input_dim = 2
+        train_dataset_len = 8
+        eval_dataset_len = 4
+        batch_size = 2
+        max_epochs = 1
+        expected_eval_steps_per_epoch = eval_dataset_len / batch_size
+
+        my_unit = DummyFitUnit(input_dim=input_dim)
+
+        # Simulate state restored from a mid-eval EPHEMERAL_PREEMPTION
+        # checkpoint: train completed for the (only) epoch, eval did not.
+        my_unit.train_progress._num_epochs_completed = max_epochs
+        my_unit.train_progress._num_steps_completed = (
+            train_dataset_len // batch_size
+        ) * max_epochs
+
+        train_dataloader = generate_random_dataloader(
+            train_dataset_len, input_dim, batch_size
+        )
+        eval_dataloader = generate_random_dataloader(
+            eval_dataset_len, input_dim, batch_size
+        )
+
+        # Spy on eval_step to confirm eval actually ran.
+        with patch.object(
+            my_unit, "eval_step", wraps=my_unit.eval_step
+        ) as mock_eval_step:
+            fit(
+                my_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=max_epochs,
+                evaluate_every_n_epochs=1,
+            )
+
+        # Eval should have run to completion despite ``_is_done`` returning
+        # True at loop entry.
+        self.assertEqual(mock_eval_step.call_count, int(expected_eval_steps_per_epoch))
+        self.assertEqual(my_unit.eval_progress.num_epochs_completed, 1)
+        # Train should NOT have re-run; the catch-up runs eval only.
+        self.assertEqual(my_unit.train_progress.num_epochs_completed, max_epochs)
+
+    def test_fit_resume_mid_eval_with_evaluate_every_n_steps(self) -> None:
+        input_dim = 2
+        train_dataset_len = 4
+        eval_dataset_len = 4
+        batch_size = 2
+        max_epochs = 1
+        train_steps_per_epoch = train_dataset_len // batch_size  # 2
+        eval_steps_per_epoch = eval_dataset_len // batch_size  # 2
+
+        my_unit = DummyFitUnit(input_dim=input_dim)
+
+        # Simulate state restored from a mid-(epoch-end-eval)
+        # EPHEMERAL_PREEMPTION checkpoint when evaluate_every_n_steps=1
+        # was also configured:
+        #   * train phase fully completed for the (only) epoch
+        #   * 2 step-triggered evals completed during the epoch
+        #   * the epoch-end eval was interrupted before completing
+        my_unit.train_progress._num_epochs_completed = max_epochs
+        my_unit.train_progress._num_steps_completed = train_steps_per_epoch * max_epochs
+        my_unit.eval_progress._num_epochs_completed = train_steps_per_epoch
+
+        train_dataloader = generate_random_dataloader(
+            train_dataset_len, input_dim, batch_size
+        )
+        eval_dataloader = generate_random_dataloader(
+            eval_dataset_len, input_dim, batch_size
+        )
+
+        with patch.object(
+            my_unit, "eval_step", wraps=my_unit.eval_step
+        ) as mock_eval_step:
+            fit(
+                my_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=max_epochs,
+                evaluate_every_n_epochs=1,
+                evaluate_every_n_steps=1,
+            )
+
+        # Catch-up SHOULD fire and run the pending epoch-end eval.
+        self.assertEqual(mock_eval_step.call_count, eval_steps_per_epoch)
+        # eval_progress should advance by exactly one epoch (the missing
+        # epoch-end eval), reaching train_steps_per_epoch + 1 = 3.
+        self.assertEqual(
+            my_unit.eval_progress.num_epochs_completed,
+            train_steps_per_epoch + 1,
+        )
+        # Train should NOT have re-run.
+        self.assertEqual(my_unit.train_progress.num_epochs_completed, max_epochs)
+
 
 class UnitWithError(TrainUnit[int], EvalUnit[int]):
     def train_step(self, state: State, data: int) -> None:

@@ -13,6 +13,7 @@ import torch
 from pyre_extensions import none_throws
 from torchtnt.framework._callback_handler import CallbackHandler
 from torchtnt.framework._loop_utils import (
+    _has_pending_fit_eval,
     _is_done,
     _is_epoch_done,
     _log_api_usage,
@@ -154,6 +155,13 @@ def _train_impl(
             f"num_steps_completed = {train_unit.train_progress.num_steps_completed}"
         )
 
+    # Catch-up for fit jobs preempted mid-eval: see
+    # ``tnt_fit_skips_eval_on_resume.bug.md`` and ``_has_pending_fit_eval``.
+    # No-op on the happy path. Runs after the train loop exits via the
+    # natural-completion path (``_is_done`` true) so that eval-phase
+    # callbacks fire before ``on_train_end``, matching happy-path ordering.
+    _maybe_run_pending_fit_eval(state, train_unit, callback_handler)
+
     train_unit.on_train_end(state)
     callback_handler.on_train_end(state, train_unit)
 
@@ -161,6 +169,58 @@ def _train_impl(
     # This ensures that side-effects made by the loop are reset before
     # returning back to the user
     _reset_module_training_mode(tracked_modules, prior_module_train_states)
+
+
+def _maybe_run_pending_fit_eval(
+    state: State,
+    train_unit: TTrainUnit,
+    callback_handler: CallbackHandler,
+) -> None:
+    """For FIT only: drain a scheduled eval epoch that was interrupted by
+    mid-eval preemption.
+
+    Fires only when:
+      * we're in a FIT entry point with eval configured,
+      * the train loop terminated naturally (``_is_done`` is True and
+        ``state.should_stop`` is False),
+      * ``eval_progress`` lags ``train_progress`` on an eval-trigger
+        boundary (``_has_pending_fit_eval``).
+
+    No-op on the happy path. See ``tnt_fit_skips_eval_on_resume.bug.md``.
+    """
+    if state.entry_point != EntryPoint.FIT or state.eval_state is None:
+        return
+    if state.should_stop:
+        return
+    train_state = none_throws(state.train_state)
+    eval_state = none_throws(state.eval_state)
+    if not _is_done(
+        train_unit.train_progress, train_state.max_epochs, train_state.max_steps
+    ):
+        return
+    if not _has_pending_fit_eval(
+        train_unit.train_progress,
+        # pyre-fixme[6]: For 2nd argument expected `Progress` but got `object`.
+        train_unit.eval_progress,
+        eval_state.evaluate_every_n_epochs,
+        eval_state.evaluate_every_n_steps,
+    ):
+        return
+    logger.info(
+        "Detected pending eval after train loop termination "
+        f"(train_epochs={train_unit.train_progress.num_epochs_completed}, "
+        # pyre-fixme[16]: ``object`` has no attribute ``num_epochs_completed``.
+        f"eval_epochs={train_unit.eval_progress.num_epochs_completed}); "
+        "running eval before on_train_end fires."
+    )
+    _evaluate_impl(
+        state,
+        # pyre-fixme[6]: For 2nd argument expected `EvalUnit[Any]` but got
+        #  `TrainUnit[Any]`.
+        train_unit,
+        callback_handler,
+    )
+    state._active_phase = ActivePhase.TRAIN
 
 
 def _train_epoch_impl(
