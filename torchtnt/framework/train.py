@@ -7,7 +7,7 @@
 # pyre-strict
 
 import logging
-from typing import Iterable, List, Optional
+from typing import cast, Iterable, List, Optional
 
 import torch
 from pyre_extensions import none_throws
@@ -24,7 +24,7 @@ from torchtnt.framework._loop_utils import (
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.evaluate import _evaluate_impl
 from torchtnt.framework.state import ActivePhase, EntryPoint, PhaseState, State
-from torchtnt.framework.unit import TTrainData, TTrainUnit
+from torchtnt.framework.unit import EvalUnit, TTrainData, TTrainUnit
 from torchtnt.framework.utils import get_timing_context
 from torchtnt.utils.timer import get_timer_summary, TimerProtocol
 from torchtnt.utils.version import is_torch_version_geq
@@ -141,6 +141,8 @@ def _train_impl(
     train_unit.on_train_start(state)
     callback_handler.on_train_start(state, train_unit)
 
+    _maybe_run_pending_fit_eval(state, train_unit, callback_handler)
+
     while not (
         state.should_stop
         or _is_done(
@@ -161,6 +163,40 @@ def _train_impl(
     # This ensures that side-effects made by the loop are reset before
     # returning back to the user
     _reset_module_training_mode(tracked_modules, prior_module_train_states)
+
+
+def _maybe_run_pending_fit_eval(
+    state: State,
+    train_unit: TTrainUnit,
+    callback_handler: CallbackHandler,
+) -> None:
+    if (
+        state.should_stop
+        or state.entry_point != EntryPoint.FIT
+        or state.eval_state is None
+    ):
+        return
+    eval_unit = cast(EvalUnit[object], train_unit)
+    if not eval_unit.eval_progress.eval_pending:
+        return
+    logger.info("Detected pending eval from a previous fit attempt; running eval.")
+    _run_fit_eval(state, train_unit, callback_handler)
+
+
+def _run_fit_eval(
+    state: State,
+    train_unit: TTrainUnit,
+    callback_handler: CallbackHandler,
+) -> None:
+    eval_unit = cast(EvalUnit[object], train_unit)
+    eval_unit.eval_progress.mark_eval_pending()
+    _evaluate_impl(
+        state,
+        eval_unit,
+        callback_handler,
+    )
+    eval_unit.eval_progress.mark_eval_completed()
+    state._active_phase = ActivePhase.TRAIN
 
 
 def _train_epoch_impl(
@@ -245,15 +281,8 @@ def _train_epoch_impl(
                 % evaluate_every_n_steps
                 == 0
             ):
-                _evaluate_impl(
-                    state,
-                    # pyre-fixme[6]: For 2nd argument expected `EvalUnit[Any]` but
-                    #  got `TrainUnit[Any]`.
-                    train_unit,
-                    callback_handler,
-                )
+                _run_fit_eval(state, train_unit, callback_handler)
                 logger.info("Finished evaluation. Resuming training epoch")
-                state._active_phase = ActivePhase.TRAIN
 
         except StopIteration:
             stop_iteration_reached = True
@@ -293,13 +322,6 @@ def _train_epoch_impl(
         and train_unit.train_progress.num_epochs_completed % evaluate_every_n_epochs
         == 0
     ):
-        _evaluate_impl(
-            state,
-            # pyre-fixme[6]: For 2nd argument expected `EvalUnit[Any]` but got
-            #  `TrainUnit[Any]`.
-            train_unit,
-            callback_handler,
-        )
-        state._active_phase = ActivePhase.TRAIN
+        _run_fit_eval(state, train_unit, callback_handler)
 
     logger.info("Ended train epoch")
