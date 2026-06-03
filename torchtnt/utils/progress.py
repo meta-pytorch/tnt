@@ -18,11 +18,13 @@ class Progress:
         num_epochs_completed: int = 0,
         num_steps_completed: int = 0,
         num_steps_completed_in_epoch: int = 0,
+        eval_pending: bool = False,
     ) -> None:
         self._num_epochs_completed: int = num_epochs_completed
         self._num_steps_completed: int = num_steps_completed
         self._num_steps_completed_in_epoch: int = num_steps_completed_in_epoch
         self._num_steps_completed_in_prev_epoch: int = 0
+        self._eval_pending: bool = eval_pending
 
     @property
     def num_epochs_completed(self) -> int:
@@ -44,6 +46,11 @@ class Progress:
         """Number of steps completed in the previous completed epoch."""
         return self._num_steps_completed_in_prev_epoch
 
+    @property
+    def eval_pending(self) -> bool:
+        """Whether a fit-triggered eval epoch started but did not complete."""
+        return self._eval_pending
+
     def increment_step(self) -> None:
         """Increment the step counts completed and completed within the epoch."""
         self._num_steps_completed += 1
@@ -55,12 +62,21 @@ class Progress:
         self._num_steps_completed_in_prev_epoch = self._num_steps_completed_in_epoch
         self._num_steps_completed_in_epoch = 0
 
+    def mark_eval_pending(self) -> None:
+        """Mark that a fit-triggered eval epoch is pending completion."""
+        self._eval_pending = True
+
+    def mark_eval_completed(self) -> None:
+        """Mark that a fit-triggered eval epoch completed."""
+        self._eval_pending = False
+
     def state_dict(self) -> Dict[str, Any]:
         """Returns a state_dict of a Progress instance in accordance with Stateful protocol."""
         return {
             "num_epochs_completed": self._num_epochs_completed,
             "num_steps_completed": self._num_steps_completed,
             "num_steps_completed_in_epoch": self._num_steps_completed_in_epoch,
+            "eval_pending": self._eval_pending,
         }
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
@@ -68,6 +84,7 @@ class Progress:
         self._num_epochs_completed = state_dict["num_epochs_completed"]
         self._num_steps_completed = state_dict["num_steps_completed"]
         self._num_steps_completed_in_epoch = state_dict["num_steps_completed_in_epoch"]
+        self._eval_pending = state_dict.get("eval_pending", False)
 
     def get_progress_string(self) -> str:
         return f"completed epochs: {self.num_epochs_completed}, completed steps: {self.num_steps_completed}, completed steps in current epoch: {self.num_steps_completed_in_epoch}."
