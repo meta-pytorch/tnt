@@ -29,6 +29,7 @@ class ProgressTest(unittest.TestCase):
             num_epochs_completed=2,
             num_steps_completed=8,
             num_steps_completed_in_epoch=4,
+            eval_pending=True,
         )
 
         state_dict = progress.state_dict()
@@ -38,12 +39,30 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(new_progress.num_epochs_completed, 0)
         self.assertEqual(new_progress.num_steps_completed, 0)
         self.assertEqual(new_progress.num_steps_completed_in_epoch, 0)
+        self.assertFalse(new_progress.eval_pending)
 
         new_progress.load_state_dict(state_dict)
 
         self.assertEqual(new_progress.num_epochs_completed, 2)
         self.assertEqual(new_progress.num_steps_completed, 8)
         self.assertEqual(new_progress.num_steps_completed_in_epoch, 4)
+        self.assertTrue(new_progress.eval_pending)
+
+    def test_progress_load_state_dict_defaults_eval_pending_to_false(self) -> None:
+        progress = Progress(eval_pending=True)
+
+        progress.load_state_dict(
+            {
+                "num_epochs_completed": 2,
+                "num_steps_completed": 8,
+                "num_steps_completed_in_epoch": 4,
+            }
+        )
+
+        self.assertEqual(progress.num_epochs_completed, 2)
+        self.assertEqual(progress.num_steps_completed, 8)
+        self.assertEqual(progress.num_steps_completed_in_epoch, 4)
+        self.assertFalse(progress.eval_pending)
 
     def test_estimated_steps_in_epoch(self) -> None:
 
