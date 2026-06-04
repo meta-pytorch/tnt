@@ -73,6 +73,7 @@ class FitTest(unittest.TestCase):
             my_unit.eval_progress.num_steps_completed,
             max_epochs * expected_eval_steps_per_epoch,
         )
+        self.assertFalse(my_unit.eval_progress.eval_pending)
 
     def test_fit_evaluate_every_n_steps(self) -> None:
         """
@@ -125,6 +126,111 @@ class FitTest(unittest.TestCase):
             my_unit.eval_progress.num_steps_completed,
             expected_num_evaluate_calls * expected_eval_steps_per_epoch,
         )
+        self.assertFalse(my_unit.eval_progress.eval_pending)
+
+    def test_fit_resume_pending_eval_runs_eval_before_train_done_check(self) -> None:
+        input_dim = 2
+        train_dataset_len = 8
+        eval_dataset_len = 4
+        batch_size = 2
+        max_epochs = 1
+        expected_eval_steps_per_epoch = eval_dataset_len // batch_size
+
+        my_unit = DummyFitUnit(input_dim=input_dim)
+        my_unit.train_progress._num_epochs_completed = max_epochs
+        my_unit.train_progress._num_steps_completed = (
+            train_dataset_len // batch_size
+        ) * max_epochs
+        my_unit.eval_progress.mark_eval_pending()
+
+        train_dataloader = generate_random_dataloader(
+            train_dataset_len, input_dim, batch_size
+        )
+        eval_dataloader = generate_random_dataloader(
+            eval_dataset_len, input_dim, batch_size
+        )
+
+        with patch.object(
+            my_unit, "eval_step", wraps=my_unit.eval_step
+        ) as mock_eval_step:
+            fit(
+                my_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=max_epochs,
+                evaluate_every_n_epochs=1,
+            )
+
+        self.assertEqual(mock_eval_step.call_count, expected_eval_steps_per_epoch)
+        self.assertEqual(my_unit.eval_progress.num_epochs_completed, 1)
+        self.assertFalse(my_unit.eval_progress.eval_pending)
+        self.assertEqual(my_unit.train_progress.num_epochs_completed, max_epochs)
+
+    def test_fit_resume_pending_eval_runs_eval_before_next_train_step(self) -> None:
+        input_dim = 2
+        train_dataset_len = 4
+        eval_dataset_len = 4
+        batch_size = 2
+
+        my_unit = DummyFitUnit(input_dim=input_dim)
+        my_unit.train_progress._num_steps_completed = 1
+        my_unit.train_progress._num_steps_completed_in_epoch = 1
+        my_unit.eval_progress.mark_eval_pending()
+
+        train_dataloader = generate_random_dataloader(
+            train_dataset_len, input_dim, batch_size
+        )
+        eval_dataloader = generate_random_dataloader(
+            eval_dataset_len, input_dim, batch_size
+        )
+
+        call_order = MagicMock()
+        with patch.object(my_unit, "eval_step", wraps=my_unit.eval_step) as eval_step:
+            with patch.object(
+                my_unit, "train_step", wraps=my_unit.train_step
+            ) as train_step:
+                call_order.attach_mock(eval_step, "eval_step")
+                call_order.attach_mock(train_step, "train_step")
+
+                fit(
+                    my_unit,
+                    train_dataloader=train_dataloader,
+                    eval_dataloader=eval_dataloader,
+                    max_steps=2,
+                    evaluate_every_n_epochs=None,
+                    evaluate_every_n_steps=1,
+                )
+
+        call_names = [mock_call[0] for mock_call in call_order.mock_calls]
+        self.assertEqual(call_names[0], "eval_step")
+        self.assertIn("train_step", call_names)
+        self.assertLess(0, call_names.index("train_step"))
+        self.assertFalse(my_unit.eval_progress.eval_pending)
+
+    def test_fit_eval_exception_leaves_eval_pending(self) -> None:
+        input_dim = 2
+        dataset_len = 4
+        batch_size = 2
+
+        my_unit = DummyFitUnit(input_dim=input_dim)
+        train_dataloader = generate_random_dataloader(
+            dataset_len, input_dim, batch_size
+        )
+        eval_dataloader = generate_random_dataloader(dataset_len, input_dim, batch_size)
+
+        with patch.object(
+            my_unit, "eval_step", side_effect=RuntimeError("eval failed")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "eval failed"):
+                fit(
+                    my_unit,
+                    train_dataloader=train_dataloader,
+                    eval_dataloader=eval_dataloader,
+                    max_epochs=1,
+                    evaluate_every_n_epochs=1,
+                )
+
+        self.assertTrue(my_unit.eval_progress.eval_pending)
 
     def test_fit_stop(self) -> None:
         Batch = Tuple[torch.Tensor, torch.Tensor]
