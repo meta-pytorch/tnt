@@ -198,6 +198,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                     storage_writer=storage_writer,
                     planner=planner,
                     async_stager=stager,
+                    use_collectives=self._knob_options.use_collectives,
                 )
                 self._prev_snapshot = cast(Future, prev_snapshot)
                 if curr_snapshot_wait:
@@ -210,6 +211,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                     process_group=self._process_group,
                     storage_writer=storage_writer,
                     planner=planner,
+                    use_collectives=self._knob_options.use_collectives,
                 )
 
         return True
