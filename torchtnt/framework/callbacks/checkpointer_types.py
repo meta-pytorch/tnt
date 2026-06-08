@@ -20,6 +20,13 @@ class KnobOptions:
         max_per_rank_io_concurrency: Maximum number of concurrent IO operations per rank in checkpointing.
                                      Defaults to 16.
         enable_storage_optimization: Enable storage efficiency optimizations for Distributed Checkpointing.
+        use_collectives: If ``False``, skip the cross-rank gather/scatter rounds that DCP uses to
+                         coordinate the global save plan. Each rank writes its local shards
+                         independently. Defaults to ``True``. Setting to ``False`` removes the
+                         coord-side bottleneck that becomes prohibitively expensive at large scales
+                         (e.g. ~50 minutes of a ~67 minute save wall at 397B TP=8 EP=16). Trade-off:
+                         the resulting checkpoint is no longer cross-world re-shardable; restart
+                         with the same parallelism layout still works.
     """
 
     # use a more conservative number of concurrent IO operations per rank in Checkpointing
@@ -28,6 +35,8 @@ class KnobOptions:
     # This would enable storage efficiency optimizations (model store):
     # e.g. Compression, Batching, Quantization etc.
     enable_storage_optimization: bool = True
+    # Skip DCP coord-side gather/scatter rounds.
+    use_collectives: bool = True
 
 
 @dataclass
