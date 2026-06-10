@@ -311,6 +311,8 @@ class _AutoUnitMixin(Generic[TData]):
         if self._prefetch_stream:
             with get_timing_context(state, f"{self.__class__.__name__}.wait_stream"):
                 # wait on the CUDA stream to complete the host to device copy
+                # pyre-fixme[6]: For 1st argument expected `Union[Stream, Stream]`
+                #  but got `Optional[Stream]`.
                 torch.cuda.current_stream().wait_stream(self._prefetch_stream)
 
         # get the next batch which was stored by _prefetch_next_batch
