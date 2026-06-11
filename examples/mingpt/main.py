@@ -144,6 +144,7 @@ def main(args: Namespace) -> None:
         opt_cfg=OptimizerConfig(learning_rate=args.lr, weight_decay=args.weight_decay),
         module=module,
         device=device,
+        # pyrefly: ignore [bad-argument-type]
         strategy="ddp" if torch.distributed.is_initialized() else None,
         log_every_n_steps=args.log_every_n_steps,
         gradient_accumulation_steps=4,

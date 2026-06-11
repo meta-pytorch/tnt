@@ -137,6 +137,7 @@ def seed(seed: int, deterministic: Optional[Union[str, int]] = None) -> None:
     _log.info(f"Setting seed to {seed}")
 
     torch.manual_seed(seed)
+    # pyrefly: ignore [bad-argument-type]
     np.random.seed(seed)
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)

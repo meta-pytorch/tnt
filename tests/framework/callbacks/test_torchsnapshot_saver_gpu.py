@@ -60,13 +60,19 @@ class TorchSnapshotSaverGPUTest(unittest.TestCase):
                 module=torch.nn.Linear(input_dim, 2), strategy="fsdp"
             )
             tc.assertNotEqual(
-                my_new_unit.optimizer.state_dict(), my_unit.optimizer.state_dict()
+                # pyrefly: ignore [missing-attribute]
+                my_new_unit.optimizer.state_dict(),
+                # pyrefly: ignore [missing-attribute]
+                my_unit.optimizer.state_dict(),
             )
             # get latest checkpoint
             ckpt_path = os.path.join(temp_dir, f"epoch_{max_epochs}_train_step_10")
             snapshot_cb.restore(ckpt_path, my_new_unit)
             tc.assertEqual(
-                my_new_unit.optimizer.state_dict(), my_unit.optimizer.state_dict()
+                # pyrefly: ignore [missing-attribute]
+                my_new_unit.optimizer.state_dict(),
+                # pyrefly: ignore [missing-attribute]
+                my_unit.optimizer.state_dict(),
             )
         finally:
             dist.barrier()  # avoid race condition

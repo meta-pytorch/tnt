@@ -54,6 +54,7 @@ class AbstractRandomDataset(Dataset, abc.ABC, Generic[TItem]):
         """
         return self.size
 
+    # pyrefly: ignore [bad-override-param-name]
     def __getitem__(self, idx: int) -> TItem:
         """
         Fetch a dataset item by index.

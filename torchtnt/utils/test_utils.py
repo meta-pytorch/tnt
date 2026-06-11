@@ -67,11 +67,14 @@ def is_asan_or_tsan() -> bool:
 
 
 def skip_if_asan(
+    # pyrefly: ignore [bad-specialization, not-a-type]
     func: Callable[TParams, TReturn],
+    # pyrefly: ignore [bad-specialization, not-a-type]
 ) -> Callable[TParams, Optional[TReturn]]:
     """Skip test run if we are in ASAN mode."""
 
     @wraps(func)
+    # pyrefly: ignore [not-a-type]
     def wrapper(*args: TParams.args, **kwargs: TParams.kwargs) -> Optional[TReturn]:
         if is_asan_or_tsan():
             print("Skipping test run since we are in ASAN mode.")

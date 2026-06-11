@@ -35,6 +35,7 @@ class UnitUtilsTest(unittest.TestCase):
 
         self.assertFalse(_step_requires_iterator(foo.bar))
         self.assertTrue(_step_requires_iterator(foo.baz))
+        # pyrefly: ignore [bad-argument-type]
         self.assertTrue(_step_requires_iterator(dummy))
 
     def test_find_optimizers_for_module(self) -> None:

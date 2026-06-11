@@ -93,7 +93,9 @@ class AveragedModel(PyTorchAveragedModel):
             self.register_buffer(
                 "n_averaged", torch.tensor(0, dtype=torch.long, device=device)
             )
+            # pyrefly: ignore [bad-override-mutable-attribute]
             self.avg_fn: Optional[TSWA_avg_fn] = None
+            # pyrefly: ignore [bad-override-mutable-attribute]
             self.multi_avg_fn: Optional[TSWA_multi_avg_fn] = multi_avg_fn
             self.use_buffers: bool = use_buffers
         else:

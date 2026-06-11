@@ -57,18 +57,27 @@ def transfer_batch_norm_stats(
     for src_batch_norm_module, dst_batch_norm_module in zip(
         src_batch_norm_modules, dst_batch_norm_modules
     ):
+        # pyrefly: ignore [missing-attribute]
         dst_batch_norm_module.running_mean.detach().copy_(
+            # pyrefly: ignore [missing-attribute]
             src_batch_norm_module.running_mean.to(
+                # pyrefly: ignore [missing-attribute]
                 dst_batch_norm_module.running_mean.device
             )
         )
+        # pyrefly: ignore [missing-attribute]
         dst_batch_norm_module.running_var.detach().copy_(
+            # pyrefly: ignore [missing-attribute]
             src_batch_norm_module.running_var.to(
+                # pyrefly: ignore [missing-attribute]
                 dst_batch_norm_module.running_var.device
             )
         )
+        # pyrefly: ignore [missing-attribute]
         dst_batch_norm_module.num_batches_tracked.detach().copy_(
+            # pyrefly: ignore [missing-attribute]
             src_batch_norm_module.num_batches_tracked.to(
+                # pyrefly: ignore [missing-attribute]
                 dst_batch_norm_module.num_batches_tracked.device
             )
         )

@@ -142,10 +142,12 @@ class PredictTest(unittest.TestCase):
             def on_predict_end(self, state: State, unit: TPredictUnit) -> None:
                 assertInTest(
                     "data_wait_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.predict_state.iteration_timer.recorded_durations,
                 )
                 assertInTest(
                     "predict_iteration_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.predict_state.iteration_timer.recorded_durations,
                 )
 

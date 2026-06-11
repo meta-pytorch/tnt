@@ -50,6 +50,7 @@ def create_progress_bar(
     kwargs = {}
     if mininterval is not None:
         kwargs["mininterval"] = mininterval
+    # pyrefly: ignore [no-matching-overload]
     return tqdm(
         desc=f"{desc} {current_epoch}",
         total=total,

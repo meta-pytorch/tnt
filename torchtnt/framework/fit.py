@@ -155,6 +155,7 @@ def fit(
         # Run test phase after training completes, if test_dataloader was provided
         if test_dataloader is not None:
             with torch.no_grad():
+                # pyrefly: ignore [bad-argument-type]
                 _test_impl(state, unit, callback_handler)
 
         logger.info("Finished fit")

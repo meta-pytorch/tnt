@@ -69,8 +69,10 @@ class TestCheckpointUtilsGPU(unittest.TestCase):
 
         tc.assertEqual(
             {str(x) for x in ckpt_dirpaths},
+            # pyrefly: ignore [no-matching-overload]
             {os.path.join(temp_dir, path) for path in paths},
         )
 
         if get_global_rank() == 0:
+            # pyrefly: ignore [bad-argument-type]
             shutil.rmtree(temp_dir)

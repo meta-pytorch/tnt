@@ -162,10 +162,12 @@ class TrainTest(unittest.TestCase):
             def on_train_end(self, state: State, unit: TTrainUnit) -> None:
                 assertInTest(
                     "data_wait_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.train_state.iteration_timer.recorded_durations,
                 )
                 assertInTest(
                     "train_iteration_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.train_state.iteration_timer.recorded_durations,
                 )
 
@@ -315,4 +317,5 @@ class TrainUnitWithError(TrainUnit[Batch]):
             raise ValueError("foo")
 
 
+# pyrefly: ignore [redefinition]
 Batch = Tuple[torch.Tensor, torch.Tensor]

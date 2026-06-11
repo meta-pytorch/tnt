@@ -675,6 +675,7 @@ def rank_zero_read_and_broadcast(
             return cast(TReturn, ret)
 
         # Otherwise, broadcast result from rank 0 to all ranks
+        # pyrefly: ignore [bad-argument-type]
         pg = PGWrapper(process_group)
         path_container = [ret]
         pg.broadcast_object_list(path_container, 0)

@@ -820,7 +820,9 @@ class BaseCheckpointerTest(unittest.TestCase):
         tc = unittest.TestCase()
         tc.assertIsNotNone(checkpoint_cb._process_group)
         tc.assertEqual(
-            checkpoint_cb._process_group._get_backend_name(), dist.Backend.GLOO
+            # pyrefly: ignore [missing-attribute]
+            checkpoint_cb._process_group._get_backend_name(),
+            dist.Backend.GLOO,
         )
         # check that a new process group was created
         tc.assertNotEqual(checkpoint_cb._process_group, dist.group.WORLD)

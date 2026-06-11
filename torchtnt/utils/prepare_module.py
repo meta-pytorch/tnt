@@ -327,7 +327,9 @@ def prepare_ddp(
         device_ids = [device.index]
     params_dict = asdict(strategy)
     # remove ddp comm hook variables from params dict
+    # pyrefly: ignore [unsupported-delete]
     del params_dict["comm_state"]
+    # pyrefly: ignore [unsupported-delete]
     del params_dict["comm_hook"]
 
     materialize_meta_params(module, device)
@@ -336,6 +338,7 @@ def prepare_ddp(
     module = module.to(device)
 
     # remove sync batch norm from params dict before converting module
+    # pyrefly: ignore [unsupported-delete]
     del params_dict["sync_batchnorm"]
     if strategy.sync_batchnorm:
         if device.type == "cuda":
@@ -345,6 +348,7 @@ def prepare_ddp(
                 f"SyncBatchNorm layers only work with GPU modules. Skipping the conversion because the device type is {device.type}."
             )
 
+    # pyrefly: ignore [unexpected-keyword]
     module = DDP(module, device_ids=device_ids, **params_dict)
     if strategy.comm_hook:
         module.register_comm_hook(state=strategy.comm_state, hook=strategy.comm_hook)
@@ -887,6 +891,7 @@ def _check_and_convert_mp_policy_dtypes(
     Returns new MixedPrecisionPolicy as its attributes are frozen (cannot assign new values to fields)
     """
 
+    # pyrefly: ignore [missing-attribute]
     dtypes = (mp_policy.param_dtype, mp_policy.reduce_dtype, mp_policy.output_dtype)
     dtypes = filter(None, dtypes)
     for dtype in dtypes:
@@ -895,13 +900,19 @@ def _check_and_convert_mp_policy_dtypes(
                 f"MixedPrecisionPolicy requires all dtypes to be torch.dtype or string. Got dtype={dtype} with type {type(dtype)}"
             )
 
+    # pyrefly: ignore [missing-attribute]
     param_dtype = mp_policy.param_dtype
+    # pyrefly: ignore [missing-attribute]
     reduce_dtype = mp_policy.reduce_dtype
+    # pyrefly: ignore [missing-attribute]
     output_dtype = mp_policy.output_dtype
+    # pyrefly: ignore [missing-attribute]
     if isinstance(mp_policy.param_dtype, str):
         param_dtype = convert_precision_str_to_dtype(mp_policy.param_dtype)
+    # pyrefly: ignore [missing-attribute]
     if isinstance(mp_policy.reduce_dtype, str):
         reduce_dtype = convert_precision_str_to_dtype(mp_policy.reduce_dtype)
+    # pyrefly: ignore [missing-attribute]
     if isinstance(mp_policy.output_dtype, str):
         output_dtype = convert_precision_str_to_dtype(mp_policy.output_dtype)
 
@@ -909,6 +920,7 @@ def _check_and_convert_mp_policy_dtypes(
         param_dtype=param_dtype,
         reduce_dtype=reduce_dtype,
         output_dtype=output_dtype,
+        # pyrefly: ignore [missing-attribute]
         cast_forward_inputs=mp_policy.cast_forward_inputs,
     )
 
