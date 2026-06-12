@@ -261,9 +261,13 @@ class PrepareModelTest(unittest.TestCase):
             cast_forward_inputs=False,
         )
         new_mp_policy = _check_and_convert_mp_policy_dtypes(mp_policy)
+        # pyrefly: ignore [missing-attribute]
         self.assertEqual(new_mp_policy.param_dtype, torch.bfloat16)
+        # pyrefly: ignore [missing-attribute]
         self.assertEqual(new_mp_policy.reduce_dtype, torch.float16)
+        # pyrefly: ignore [missing-attribute]
         self.assertEqual(new_mp_policy.output_dtype, None)
+        # pyrefly: ignore [missing-attribute]
         self.assertFalse(new_mp_policy.cast_forward_inputs)
 
         # pyre-ignore: Incompatible parameter type [6] (intentional for this test)

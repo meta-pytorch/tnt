@@ -79,10 +79,13 @@ def copy_data_to_device(
 
     data_type = type(data)
     if issubclass(data_type, defaultdict):
+        # pyrefly: ignore [bad-return]
         return data_type(
+            # pyrefly: ignore [missing-attribute]
             data.default_factory,
             {
                 k: copy_data_to_device(v, device, *args, **kwargs)
+                # pyrefly: ignore [missing-attribute]
                 for k, v in data.items()
             },
         )
@@ -100,12 +103,15 @@ def copy_data_to_device(
             }
         )
     elif issubclass(data_type, list):
+        # pyrefly: ignore [bad-return, not-iterable]
         return data_type(copy_data_to_device(e, device, *args, **kwargs) for e in data)
     elif issubclass(data_type, tuple):
         if hasattr(data, "_asdict") and hasattr(data, "_fields"):
+            # pyrefly: ignore [bad-return]
             return data_type(
                 **copy_data_to_device(data._asdict(), device, *args, **kwargs)
             )
+        # pyrefly: ignore [bad-return, not-iterable]
         return data_type(copy_data_to_device(e, device, *args, **kwargs) for e in data)
     # checking for __dataclass_fields__ is official way to check if data is a dataclass
     elif hasattr(data, "__dataclass_fields__"):
@@ -114,10 +120,12 @@ def copy_data_to_device(
                 field.name: copy_data_to_device(
                     getattr(data, field.name), device, *args, **kwargs
                 )
+                # pyrefly: ignore [bad-argument-type]
                 for field in fields(data)
                 if field.init
             }
         )
+        # pyrefly: ignore [bad-argument-type]
         for field in fields(data):
             if not field.init:
                 setattr(
@@ -159,6 +167,7 @@ def record_data_in_stream(data: T, stream: torch.cuda.streams.Stream) -> None:
 
     # Redundant isinstance(data, tuple) check is required here to make pyre happy
     if _is_named_tuple(data) and isinstance(data, tuple):
+        # pyrefly: ignore [missing-attribute]
         record_data_in_stream(data._asdict(), stream)
     elif isinstance(data, (list, tuple)):
         for e in data:
@@ -270,7 +279,9 @@ def get_nvidia_smi_gpu_stats(device: torch.device) -> GPUStats:  # pragma: no-co
         "utilization_gpu_percent": stats[0],
         "utilization_memory_percent": stats[1],
         "fan_speed_percent": stats[2],
+        # pyrefly: ignore [bad-assignment]
         "memory_used_mb": stats[3],
+        # pyrefly: ignore [bad-assignment]
         "memory_free_mb": stats[4],
         "temperature_gpu_celsius": stats[5],
         "temperature_memory_celsius": stats[6],

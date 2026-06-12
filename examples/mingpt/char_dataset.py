@@ -45,6 +45,7 @@ class CharDataset(Dataset):
     def __len__(self) -> int:
         return len(self.data) - self.block_size
 
+    # pyrefly: ignore [bad-override-param-name]
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         # grab a chunk of (block_size + 1) characters from the data
         chunk = self.data[idx : idx + self.block_size + 1]

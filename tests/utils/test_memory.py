@@ -217,7 +217,10 @@ class MemoryTest(unittest.TestCase):
         inputs = RandomModuleList()
         tensor_map = get_tensor_size_bytes_map(inputs)
         self.assertEqual(
-            len(tensor_map), 2 * len(inputs.metric_list[0].window_buffer.buffers) + 6
+            # pyrefly: ignore [missing-attribute]
+            len(tensor_map),
+            # pyrefly: ignore [missing-attribute]
+            2 * len(inputs.metric_list[0].window_buffer.buffers) + 6,
         )
         for metric in inputs.metric_list:
             metric = cast(RandomModule, metric)

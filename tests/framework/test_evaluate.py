@@ -169,10 +169,12 @@ class EvaluateTest(unittest.TestCase):
             def on_eval_end(self, state: State, unit: TEvalUnit) -> None:
                 assertInTest(
                     "data_wait_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.eval_state.iteration_timer.recorded_durations,
                 )
                 assertInTest(
                     "eval_iteration_time",
+                    # pyrefly: ignore [missing-attribute]
                     state.eval_state.iteration_timer.recorded_durations,
                 )
 

@@ -35,6 +35,7 @@ def _matmul_flop_jit(inputs: Tuple[torch.Tensor], _outputs: Tuple[Any]) -> Numbe
     assert len(input_shapes) == 2, input_shapes
     assert input_shapes[0][-1] == input_shapes[1][-2], input_shapes
     flop = inputs[0].numel() * input_shapes[-1][-1]
+    # pyrefly: ignore [bad-return]
     return flop
 
 
@@ -52,6 +53,7 @@ def _addmm_flop_jit(inputs: Tuple[torch.Tensor], _outputs: Tuple[Any]) -> Number
     batch_size, input_dim = input_shapes[0]
     output_dim = input_shapes[1][1]
     flops = batch_size * input_dim * output_dim
+    # pyrefly: ignore [bad-return]
     return flops
 
 
@@ -95,6 +97,7 @@ def _conv_flop_count(
         * reduce(operator.mul, w_shape, 1)
         * reduce(operator.mul, conv_shape, 1)
     )
+    # pyrefly: ignore [bad-return]
     return flop
 
 
@@ -125,7 +128,9 @@ def _conv_backward_flop_jit(
 
     grad_out_shape, x_shape, w_shape = [cast(torch.Tensor, i).shape for i in inputs[:3]]
     output_mask = inputs[-1]
+    # pyrefly: ignore [bad-index]
     fwd_transposed = inputs[7]
+    # pyrefly: ignore [bad-assignment]
     flop_count: Number = 0
 
     if cast(Tuple[bool], output_mask)[0]:
@@ -134,7 +139,9 @@ def _conv_backward_flop_jit(
         flop_count = flop_count + _conv_flop_count(
             grad_out_shape, w_shape, grad_input_shape, not fwd_transposed
         )
+    # pyrefly: ignore [bad-index]
     if cast(Tuple[bool], output_mask)[1]:
+        # pyrefly: ignore [bad-index]
         grad_weight_shape = outputs[1].shape
         # pyre-fixme[58]: `+` is not supported for operand types `int` and `Number`.
         flop_count += _conv_flop_count(
@@ -147,6 +154,7 @@ def _conv_backward_flop_jit(
     return flop_count
 
 
+# pyrefly: ignore [bad-assignment]
 flop_mapping: Dict[Callable[..., Any], Callable[[Tuple[Any], Tuple[Any]], Number]] = {
     aten.mm: _matmul_flop_jit,
     aten.matmul: _matmul_flop_jit,
@@ -232,6 +240,7 @@ class FlopTensorDispatchMode(TorchDispatchMode):
         outs = _normalize_tuple(rs)
 
         if func in flop_mapping:
+            # pyrefly: ignore [bad-argument-type]
             flop_count = flop_mapping[func](args, outs)
             for par in self._parents:
                 # pyre-fixme [58]

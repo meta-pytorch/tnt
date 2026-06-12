@@ -53,6 +53,7 @@ class BaseCSVWriter(Callback, ABC):
         self.output_path: str = os.path.join(dir_path, filename)
         fs = get_filesystem(self.output_path)
         self._file: TextIO = fs.open(self.output_path, mode="a")
+        # pyrefly: ignore [missing-attribute]
         self._writer: csv._writer = csv.writer(self._file, delimiter=delimiter)
 
     @abstractmethod

@@ -257,6 +257,7 @@ class AppStateMixinTest(unittest.TestCase):
 
         auto_unit = DummyAutoUnit(module=module)
         auto_unit.module2 = torch.nn.Linear(10, 10).to(device)
+        # pyrefly: ignore [missing-attribute]
         auto_unit.optim2 = torch.optim.Adam(auto_unit.module2.parameters())
 
         with patch(

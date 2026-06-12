@@ -110,6 +110,7 @@ class MultiDataLoader:
                 logger.info("Storing iterator state in MultiDataLoader state_dict")
                 # we make an implicit assumption here that none of the dataloaders have the "iterator_state" key in order to be backwards compatible
                 # with already saved checkpoints (we don't want to modify the dataloaders stateful names)
+                # pyrefly: ignore [unsupported-operation]
                 state_dict["iterator_state"] = iterator_state
 
         return state_dict

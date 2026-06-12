@@ -325,6 +325,7 @@ class CheckpointPath:
     def __repr__(self) -> str:
         return f"CheckpointPath(dirpath={self.dirpath}, epoch={self.epoch}, step={self.step}, metric_data={self.metric_data})"
 
+    # pyrefly: ignore [bad-override]
     def __eq__(self, other: "CheckpointPath") -> bool:
         return (
             self.dirpath == other.dirpath

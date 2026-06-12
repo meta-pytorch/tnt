@@ -42,6 +42,7 @@ def _has_method_override(
     if instance_method is None:
         return False
 
+    # pyrefly: ignore [missing-attribute]
     return instance_method.__code__ != base_method.__code__
 
 

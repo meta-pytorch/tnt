@@ -304,7 +304,10 @@ class TorchSnapshotSaverTest(unittest.TestCase):
                 module=torch.nn.Linear(input_dim, 2), strategy="ddp"
             )
             optim_equal = check_state_dict_eq(
-                my_new_unit.optimizer.state_dict(), my_unit.optimizer.state_dict()
+                # pyrefly: ignore [missing-attribute]
+                my_new_unit.optimizer.state_dict(),
+                # pyrefly: ignore [missing-attribute]
+                my_unit.optimizer.state_dict(),
             )
             tc.assertFalse(optim_equal)
             module_equal = check_state_dict_eq(
@@ -316,7 +319,12 @@ class TorchSnapshotSaverTest(unittest.TestCase):
             snapshot_cb.restore(ckpt_path, my_new_unit)
 
             assert_state_dict_eq(
-                tc, my_new_unit.optimizer.state_dict(), my_unit.optimizer.state_dict()
+                # pyrefly: ignore [missing-attribute]
+                tc,
+                # pyrefly: ignore [missing-attribute]
+                my_new_unit.optimizer.state_dict(),
+                # pyrefly: ignore [missing-attribute]
+                my_unit.optimizer.state_dict(),
             )
             assert_state_dict_eq(
                 tc, my_new_unit.module.state_dict(), my_unit.module.state_dict()

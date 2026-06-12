@@ -64,6 +64,7 @@ from typing_extensions import TypeAlias
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+# pyrefly: ignore [not-a-type]
 TDataloader: TypeAlias = Union[
     Iterable[TTrainData], Iterable[TEvalData], Iterable[TPredictData]
 ]

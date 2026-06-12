@@ -149,27 +149,33 @@ class AppStateMixin:
     def __setattr__(self, name: str, value: object) -> None:
         # Check first for metrics since some libraries subclass nn.Module as well
         if isinstance(value, MetricStateful):
+            # pyrefly: ignore [bad-argument-type]
             self._update_attr(name, value, self.__dict__.get("_metrics"))
         elif isinstance(value, torch.nn.Module):
+            # pyrefly: ignore [bad-argument-type]
             self._update_attr(name, value, self.__dict__.get("_modules"))
         elif isinstance(value, torch.optim.Optimizer):
+            # pyrefly: ignore [bad-argument-type]
             self._update_attr(name, value, self.__dict__.get("_optimizers"))
         elif isinstance(value, TLRScheduler):
             self._update_attr(
                 name,
                 value,
+                # pyrefly: ignore [bad-argument-type]
                 self.__dict__.get("_lr_schedulers"),
             )
         elif isinstance(value, Progress):
             self._update_attr(
                 name,
                 value,
+                # pyrefly: ignore [bad-argument-type]
                 self.__dict__.get("_progress"),
             )
         elif isinstance(value, Stateful) and not inspect.isclass(value):
             self._update_attr(
                 name,
                 value,
+                # pyrefly: ignore [bad-argument-type]
                 self.__dict__.get("_misc_statefuls"),
             )
         else:

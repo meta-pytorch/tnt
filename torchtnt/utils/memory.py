@@ -38,6 +38,7 @@ def get_tensor_size_bytes_map(
         if isinstance(attribute, torch.Tensor):
             tensor_map[attribute] = attribute.size().numel() * attribute.element_size()
         elif _is_named_tuple(attribute):
+            # pyrefly: ignore [missing-attribute]
             attributes_q.extend(attribute._asdict().values())
         elif isinstance(attribute, Mapping):
             attributes_q.extend(attribute.values())

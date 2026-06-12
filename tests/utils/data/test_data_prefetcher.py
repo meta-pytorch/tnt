@@ -23,6 +23,7 @@ class DataPrefetcherTest(unittest.TestCase):
         """Returns a dataset of random inputs and labels for binary classification."""
         data = torch.randn(num_samples, input_dim)
         labels = torch.randint(low=0, high=2, size=(num_samples,))
+        # pyrefly: ignore [bad-return]
         return TensorDataset(data, labels)
 
     def test_device_data_prefetcher(self) -> None:

@@ -45,6 +45,7 @@ class TestAnomalyLogger(unittest.TestCase):
             "torchtnt.utils.loggers.anomaly_logger.logging.Logger.warning",
             side_effect=warning_container.append,
         ):
+            # pyrefly: ignore [bad-instantiation]
             logger = AnomalyLogger(
                 tracked_metrics=tracked_metrics,
             )
@@ -59,6 +60,7 @@ class TestAnomalyLogger(unittest.TestCase):
         "torchtnt.utils.loggers.anomaly_logger.AnomalyLogger.on_anomaly_detected",
     )
     def test_log(self, mock_on_anomaly_detected: MagicMock) -> None:
+        # pyrefly: ignore [bad-instantiation]
         logger = AnomalyLogger(
             tracked_metrics=[
                 TrackedMetric(
@@ -124,6 +126,7 @@ class TestAnomalyLogger(unittest.TestCase):
         "torchtnt.utils.loggers.anomaly_logger.AnomalyLogger.on_anomaly_detected",
     )
     def test_log_dict(self, mock_on_anomaly_detected: MagicMock) -> None:
+        # pyrefly: ignore [bad-instantiation]
         logger = AnomalyLogger(
             tracked_metrics=[
                 TrackedMetric(
@@ -180,6 +183,7 @@ class TestAnomalyLogger(unittest.TestCase):
         side_effect=Exception("test exception"),
     )
     def test_on_anomaly_callback_exception(self, _) -> None:
+        # pyrefly: ignore [bad-instantiation]
         logger = AnomalyLogger(
             tracked_metrics=[
                 TrackedMetric(

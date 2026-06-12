@@ -40,7 +40,9 @@ class TensorBoardParameterMonitor(Callback):
 
     def __init__(self, logger: Union[TensorBoardLogger, SummaryWriter]) -> None:
         if isinstance(logger, TensorBoardLogger):
+            # pyrefly: ignore [bad-assignment]
             logger = logger.writer
+        # pyrefly: ignore [bad-assignment]
         self._writer: Optional[SummaryWriter] = logger
 
     def on_train_epoch_end(self, state: State, unit: TTrainUnit) -> None:

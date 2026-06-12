@@ -49,6 +49,7 @@ class DummySWAAutoUnit(DummyAutoUnit):
         if state.active_phase == ActivePhase.TRAIN:
             outputs = self.module(inputs)
         else:
+            # pyrefly: ignore [not-callable]
             outputs = self.swa_model(inputs) if self.swa_model else self.module(inputs)
 
         loss = torch.nn.functional.cross_entropy(outputs, targets)
@@ -97,6 +98,7 @@ class TestAutoUnitGPU(unittest.TestCase):
         state = get_dummy_train_state(dummy_iterable)
         auto_unit.train_step(
             state=state,
+            # pyrefly: ignore [bad-argument-type]
             data=auto_unit.get_next_train_batch(state, iter(dummy_iterable)),
         )
         mock_autocast.assert_called_with(
@@ -119,6 +121,7 @@ class TestAutoUnitGPU(unittest.TestCase):
         state = get_dummy_train_state(dummy_iterable)
         auto_unit.train_step(
             state=state,
+            # pyrefly: ignore [bad-argument-type]
             data=auto_unit.get_next_train_batch(state, iter(dummy_iterable)),
         )
         mock_autocast.assert_called_with(
@@ -194,8 +197,11 @@ class TestAutoUnitGPU(unittest.TestCase):
         train(auto_unit, dataloader, max_epochs=1, max_steps_per_epoch=5)
         train(auto_unit_fsdp, dataloader, max_epochs=1, max_steps_per_epoch=5)
 
+        # pyrefly: ignore [missing-attribute]
         swa_params = list(auto_unit.swa_model.module.parameters())
+        # pyrefly: ignore [bad-argument-type]
         with FSDP.summon_full_params(auto_unit_fsdp.swa_model):
+            # pyrefly: ignore [missing-attribute]
             swa_fsdp_params = list(auto_unit_fsdp.swa_model.module.parameters())
 
             # Iterate and compare each parameter
@@ -294,10 +300,15 @@ class TestAutoUnitGPU(unittest.TestCase):
             evaluate_every_n_epochs=1,
         )
 
+        # pyrefly: ignore [missing-attribute]
         swa_params = list(auto_unit.swa_model.parameters())
+        # pyrefly: ignore [missing-attribute]
         swa_buffers = list(auto_unit.swa_model.buffers())
+        # pyrefly: ignore [bad-argument-type]
         with FSDP.summon_full_params(auto_unit_fsdp.swa_model):
+            # pyrefly: ignore [missing-attribute]
             swa_fsdp_params = auto_unit_fsdp.swa_model.parameters()
+            # pyrefly: ignore [missing-attribute]
             swa_fsdp_buffers = auto_unit_fsdp.swa_model.buffers()
 
             # Iterate and compare each parameter
@@ -369,7 +380,10 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the first step no_sync should be called since we accumulate gradients
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                state=state, data=auto_unit.get_next_train_batch(state, dummy_iterator)
+                # pyrefly: ignore [bad-argument-type]
+                state=state,
+                # pyrefly: ignore [bad-argument-type]
+                data=auto_unit.get_next_train_batch(state, dummy_iterator),
             )
             no_sync_mock.assert_called_once()
 
@@ -377,7 +391,10 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the second step no_sync should not be called since we run optimizer step
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                state=state, data=auto_unit.get_next_train_batch(state, dummy_iterator)
+                # pyrefly: ignore [bad-argument-type]
+                state=state,
+                # pyrefly: ignore [bad-argument-type]
+                data=auto_unit.get_next_train_batch(state, dummy_iterator),
             )
             no_sync_mock.assert_not_called()
 
@@ -404,7 +421,10 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the first step no_sync should be called since we accumulate gradients
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                state=state, data=auto_unit.get_next_train_batch(state, dummy_iterator)
+                # pyrefly: ignore [bad-argument-type]
+                state=state,
+                # pyrefly: ignore [bad-argument-type]
+                data=auto_unit.get_next_train_batch(state, dummy_iterator),
             )
             no_sync_mock.assert_called_once()
 
@@ -412,7 +432,10 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the second step no_sync should not be called since we run optimizer step
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                state=state, data=auto_unit.get_next_train_batch(state, dummy_iterator)
+                # pyrefly: ignore [bad-argument-type]
+                state=state,
+                # pyrefly: ignore [bad-argument-type]
+                data=auto_unit.get_next_train_batch(state, dummy_iterator),
             )
             no_sync_mock.assert_not_called()
 

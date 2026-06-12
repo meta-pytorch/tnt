@@ -187,6 +187,7 @@ class EmptyDataloaderDetectorCallbackTest(unittest.TestCase):
             def __len__(self) -> int:
                 return 0
 
+            # pyrefly: ignore [bad-override-param-name]
             def __getitem__(self, idx: int) -> Batch:
                 raise IndexError("Empty dataset")
 

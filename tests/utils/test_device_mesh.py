@@ -90,6 +90,7 @@ class TestGlobalMeshCoordinator(unittest.TestCase):
             dp_shard=-1, dp_replicate=1, tp=4, device_type="cpu"
         )
         tc.assertIsNotNone(gmc.tp_mesh)
+        # pyrefly: ignore [missing-attribute]
         tc.assertEqual(gmc.tp_mesh.size(), 4)
 
     def test_dp_mesh(self) -> None:

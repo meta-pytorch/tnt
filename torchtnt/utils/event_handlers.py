@@ -70,13 +70,16 @@ def log_interval(
     unique_id = _generate_random_int64()
     if metadata is None:
         metadata = {}
+    # pyrefly: ignore [no-matching-overload]
     metadata.update({"action": "start", "unique_id": unique_id})
+    # pyrefly: ignore [bad-argument-type]
     start_event = Event(name=name, metadata=metadata)
     log_event(start_event)
 
     yield
 
     metadata["action"] = "end"
+    # pyrefly: ignore [bad-argument-type]
     end_event = Event(name=name, metadata=metadata)
     log_event(end_event)
 

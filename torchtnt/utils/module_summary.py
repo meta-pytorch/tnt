@@ -640,6 +640,7 @@ def _parse_batch_shape(batch: torch.Tensor) -> Union[TUnknown, List[int]]:
 
     if isinstance(batch, (list, tuple)):
         shape = [_parse_batch_shape(el) for el in batch]
+        # pyrefly: ignore [bad-return]
         return shape
 
     return _UNKNOWN_SIZE

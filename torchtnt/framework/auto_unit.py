@@ -419,6 +419,7 @@ class AutoPredictUnit(_AutoUnitMixin[TPredictData], PredictUnit[TPredictData]):
         """
         pass
 
+    # pyrefly: ignore [bad-override]
     def get_next_predict_batch(
         self, state: State, data_iter: Iterator[TPredictData]
     ) -> Union[Iterator[TPredictData], TPredictData]:
@@ -1002,6 +1003,7 @@ class AutoUnit(
 
         return total_grad_norm
 
+    # pyrefly: ignore [bad-override]
     def get_next_train_batch(
         self, state: State, data_iter: Iterator[TData]
     ) -> Union[Iterator[TData], TData]:
@@ -1010,6 +1012,7 @@ class AutoUnit(
             return data_iter
         return self._get_next_batch(state, data_iter)
 
+    # pyrefly: ignore [bad-override]
     def get_next_eval_batch(
         self, state: State, data_iter: Iterator[TData]
     ) -> Union[Iterator[TData], TData]:
@@ -1018,6 +1021,7 @@ class AutoUnit(
             return data_iter
         return self._get_next_batch(state, data_iter)
 
+    # pyrefly: ignore [bad-override]
     def get_next_predict_batch(
         self, state: State, data_iter: Iterator[TData]
     ) -> Union[Iterator[TData], TData]:
@@ -1026,6 +1030,7 @@ class AutoUnit(
             return data_iter
         return self._get_next_batch(state, data_iter)
 
+    # pyrefly: ignore [bad-override]
     def get_next_test_batch(
         self, state: State, data_iter: Iterator[TData]
     ) -> Union[Iterator[TData], TData]:

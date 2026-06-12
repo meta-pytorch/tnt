@@ -94,6 +94,7 @@ class MultiIterator(Iterator[Dict[str, Any]]):
         pass
 
 
+# pyrefly: ignore [invalid-inheritance]
 class StoppingMechanism(StrEnum):
     ALL_DATASETS_EXHAUSTED = "ALL_DATASETS_EXHAUSTED"
     SMALLEST_DATASET_EXHAUSTED = "SMALLEST_DATASET_EXHAUSTED"
@@ -182,6 +183,7 @@ class RoundRobinIterator(MultiIterator):
             }
         except StopIteration:
             if (
+                # pyrefly: ignore [missing-attribute]
                 self.iteration_strategy.stopping_mechanism
                 == StoppingMechanism.SMALLEST_DATASET_EXHAUSTED
             ):
@@ -282,9 +284,11 @@ class AllDatasetBatchesIterator(MultiIterator):
         batch_dict = {}
         for iterator in self.individual_iterators:
             try:
+                # pyrefly: ignore [unsupported-operation]
                 batch_dict[iterator] = next(self.individual_iterators[iterator])
             except StopIteration:
                 if (
+                    # pyrefly: ignore [missing-attribute]
                     self.iteration_strategy.stopping_mechanism
                     == StoppingMechanism.SMALLEST_DATASET_EXHAUSTED
                 ):
@@ -302,6 +306,7 @@ class AllDatasetBatchesIterator(MultiIterator):
                         self.individual_iterators[iterator] = iter(
                             self.individual_dataloaders[iterator]
                         )
+                        # pyrefly: ignore [unsupported-operation]
                         batch_dict[iterator] = next(self.individual_iterators[iterator])
 
         if len(batch_dict) == 0:

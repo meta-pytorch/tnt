@@ -88,7 +88,9 @@ class TestAutoUnit(unittest.TestCase):
         train_dl = generate_random_dataloader(dataset_len, input_dim, batch_size)
         train(auto_unit, train_dataloader=train_dl, max_epochs=max_epochs)
         self.assertEqual(
-            auto_unit.lr_scheduler.step.call_count, expected_steps_per_epoch
+            # pyrefly: ignore [missing-attribute]
+            auto_unit.lr_scheduler.step.call_count,
+            expected_steps_per_epoch,
         )
 
     def test_lr_scheduler_epoch(self) -> None:
@@ -110,6 +112,7 @@ class TestAutoUnit(unittest.TestCase):
         train_dl = generate_random_dataloader(dataset_len, input_dim, batch_size)
 
         train(auto_unit, train_dataloader=train_dl, max_epochs=max_epochs)
+        # pyrefly: ignore [missing-attribute]
         self.assertEqual(auto_unit.lr_scheduler.step.call_count, max_epochs)
 
     def test_mixed_precision_invalid_str(self) -> None:
@@ -218,6 +221,7 @@ class TestAutoUnit(unittest.TestCase):
             self.assertEqual(update_swa_mock.call_count, 2)
 
         auto_unit.train_progress = Progress()  # reset progress
+        # pyrefly: ignore [missing-attribute]
         auto_unit.swa_params.step_or_epoch_update_freq = 2
         with patch.object(auto_unit, "_update_swa") as update_swa_mock:
             train(auto_unit, dataloader, max_epochs=1, max_steps_per_epoch=6)
@@ -226,7 +230,9 @@ class TestAutoUnit(unittest.TestCase):
 
         auto_unit.step_lr_interval = "epoch"
         auto_unit.train_progress = Progress()  # reset progress
+        # pyrefly: ignore [missing-attribute]
         auto_unit.swa_params.warmup_steps_or_epochs = 1
+        # pyrefly: ignore [missing-attribute]
         auto_unit.swa_params.step_or_epoch_update_freq = 1
         with patch.object(auto_unit, "_update_swa") as update_swa_mock:
             with patch.object(auto_unit.lr_scheduler, "step") as lr_scheduler_step_mock:
@@ -500,6 +506,7 @@ class TestAutoUnit(unittest.TestCase):
 
         my_unit = LastBatchAutoUnit(
             module=my_module,
+            # pyrefly: ignore [bad-argument-type]
             expected_steps_per_epoch=expected_steps_per_epoch,
         )
 
@@ -628,7 +635,11 @@ class TestAutoUnit(unittest.TestCase):
             batch = auto_unit._get_next_batch(state, first_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
-            auto_unit, train_prefetched=True, train_next_batch=2
+            # pyrefly: ignore [bad-argument-type]
+            auto_unit,
+            train_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
+            train_next_batch=2,
         )
 
         with move_data_to_device_mock:
@@ -636,7 +647,11 @@ class TestAutoUnit(unittest.TestCase):
         # prefetched data is still from the previous data iter even though the new data iter is passed
         self.assertEqual(batch, 2)
         self._assert_next_batch_dicts(
-            auto_unit, train_prefetched=True, train_next_batch=3
+            # pyrefly: ignore [bad-argument-type]
+            auto_unit,
+            train_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
+            train_next_batch=3,
         )
 
         with move_data_to_device_mock:
@@ -669,7 +684,11 @@ class TestAutoUnit(unittest.TestCase):
             batch = auto_unit._get_next_batch(state, train_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
-            auto_unit, train_prefetched=True, train_next_batch=2
+            # pyrefly: ignore [bad-argument-type]
+            auto_unit,
+            train_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
+            train_next_batch=2,
         )
 
         state._active_phase = ActivePhase.EVALUATE
@@ -679,8 +698,10 @@ class TestAutoUnit(unittest.TestCase):
         self._assert_next_batch_dicts(
             auto_unit,
             train_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
             train_next_batch=2,
             eval_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
             eval_next_batch=4,
         )
 
@@ -691,10 +712,13 @@ class TestAutoUnit(unittest.TestCase):
         self._assert_next_batch_dicts(
             auto_unit,
             train_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
             train_next_batch=2,
             eval_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
             eval_next_batch=4,
             predict_prefetched=True,
+            # pyrefly: ignore [bad-argument-type]
             predict_next_batch=6,
         )
 
@@ -735,10 +759,12 @@ class TestAutoUnit(unittest.TestCase):
         data = [1, 2, 3]
         auto_unit = DummyAutoUnit(module=torch.nn.Linear(2, 2), enable_prefetch=True)
 
+        # pyrefly: ignore [bad-argument-type]
         _ = auto_unit._get_next_batch(get_dummy_train_state(), iter(data))
         self.assertEqual(auto_unit._phase_to_next_batch[ActivePhase.TRAIN], 2)
 
         auto_unit = DummyAutoUnit(module=torch.nn.Linear(2, 2), enable_prefetch=False)
+        # pyrefly: ignore [bad-argument-type]
         _ = auto_unit._get_next_batch(get_dummy_train_state(), iter(data))
         self.assertIsNone(auto_unit._phase_to_next_batch[ActivePhase.TRAIN])
 
@@ -772,11 +798,14 @@ class TestAutoUnit(unittest.TestCase):
 
             # Check if set_requires_gradient_sync is called with the correct boolean
             if (step + 1) % auto_unit.gradient_accumulation_steps == 0:
+                # pyrefly: ignore [missing-attribute]
                 auto_unit.module.set_requires_gradient_sync.assert_called_with(True)
             else:
+                # pyrefly: ignore [missing-attribute]
                 auto_unit.module.set_requires_gradient_sync.assert_called_with(False)
 
             # Reset mock for the next iteration
+            # pyrefly: ignore [missing-attribute]
             auto_unit.module.set_requires_gradient_sync.reset_mock()
 
             auto_unit.train_progress.increment_step()

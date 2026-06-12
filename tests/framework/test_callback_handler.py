@@ -306,8 +306,10 @@ class CallbackHandlerTest(unittest.TestCase):
 
         for hook in remaining_callback_hooks:
             kwargs = {hook: dummy_fn}
+            # pyrefly: ignore [bad-argument-type]
             callbacks.append(Lambda(**kwargs))
 
+        # pyrefly: ignore [bad-argument-type]
         implemented_cbs = _get_implemented_callback_mapping(callbacks)
         for hook in remaining_callback_hooks:
             self.assertIn(hook, implemented_cbs)
@@ -328,18 +330,22 @@ class CallbackHandlerTest(unittest.TestCase):
             callback_name = "first_callback"
 
             def on_train_start(self, state: State, unit: TTrainUnit) -> None:
+                # pyrefly: ignore [missing-attribute]
                 unit.on_train_start_callback_order.append(self.callback_name)
 
             def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+                # pyrefly: ignore [missing-attribute]
                 unit.on_train_end_callback_order.append(self.callback_name)
 
         class SecondCallback(Callback):
             callback_name = "second_callback"
 
             def on_train_start(self, state: State, unit: TTrainUnit) -> None:
+                # pyrefly: ignore [missing-attribute]
                 unit.on_train_start_callback_order.append(self.callback_name)
 
             def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+                # pyrefly: ignore [missing-attribute]
                 unit.on_train_end_callback_order.append(self.callback_name)
 
         unit = DummyUnit()

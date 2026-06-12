@@ -96,6 +96,7 @@ def log_memory_snapshot(output_dir: str, file_prefix: Optional[str] = None) -> N
     save_dir = os.path.join(output_dir, f"{file_prefix}_rank{rank}")
     try:
         snapshot = torch.cuda.memory._snapshot()
+        # pyrefly: ignore [bad-argument-type]
         _dump_snapshot(save_dir, snapshot)
         logger.info(f"Logged memory snapshot to {save_dir}")
     except Exception as e:
