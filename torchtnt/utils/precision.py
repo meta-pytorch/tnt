@@ -7,7 +7,7 @@
 
 # pyre-strict
 
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 import torch
 from torch.amp.grad_scaler import GradScaler
@@ -38,7 +38,10 @@ def convert_precision_str_to_dtype(precision: str) -> Optional[torch.dtype]:
 
 
 def get_grad_scaler_from_precision(
-    precision: torch.dtype, *, is_fsdp1_module: Optional[bool] = False
+    precision: torch.dtype,
+    *,
+    is_fsdp1_module: Optional[bool] = False,
+    grad_scaler_kwargs: Optional[dict[str, Any]] = None,
 ) -> Optional[GradScaler]:
     """
     Returns the correct grad scaler to use based on the precision and whether
@@ -48,16 +51,27 @@ def get_grad_scaler_from_precision(
     Args:
         precision: the precision being used
         is_fsdp1_module: whether the grad scaler is for an FSDP1 module
+        grad_scaler_kwargs: optional parameters for configuring the grad scaler
+            (init_scale, growth_factor, backoff_factor, growth_interval)
 
     Returns:
         The appropriate grad scaler to use, ``None`` if no grad scaler should be used.
     """
 
     if precision == torch.float16:
+
+        if grad_scaler_kwargs is None:
+            grad_scaler_kwargs = {}
+
         if is_fsdp1_module:
             from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 
-            return ShardedGradScaler()
+            return ShardedGradScaler(
+                **grad_scaler_kwargs,
+            )
         else:
-            return GradScaler("cuda")
+            return GradScaler(
+                device="cuda",
+                **grad_scaler_kwargs,
+            )
     return None
