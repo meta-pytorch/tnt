@@ -6,6 +6,7 @@
 
 # pyre-strict
 
+import inspect
 import logging
 import time
 from concurrent.futures import Future
@@ -57,7 +58,7 @@ from torchtnt.framework.unit import (
 )
 from torchtnt.framework.utils import get_timing_context
 from torchtnt.utils.checkpoint import BestCheckpointConfig, CheckpointPath, Phase
-from torchtnt.utils.distributed import get_or_create_gloo_pg
+from torchtnt.utils.distributed import get_global_rank, get_or_create_gloo_pg
 from torchtnt.utils.rank_zero_log import rank_zero_info, rank_zero_warn
 from torchtnt.utils.stateful import MultiStateful, Stateful
 from typing_extensions import TypeAlias
@@ -398,7 +399,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         )
 
     @staticmethod
-    def _maybe_add_dataloader_to_app_state(
+    def _maybe_add_dataloader_to_app_state(  # noqa: C901
         app_state: Dict[str, Stateful],
         checkpoint_path: Optional[CheckpointPath],
         storage_reader: StorageReader,
@@ -436,7 +437,30 @@ class DistributedCheckpointSaver(BaseCheckpointer):
 
         # check if any of the candidate phases has a dataloader saved in the checkpoint. If so, include
         # it in the app state. More than one dataloader may be present if using fit.
-        metadata = storage_reader.read_metadata()
+        # Use global metadata if available, otherwise fall back to rank local metadata.
+        # This mirrors the fallback in torch.distributed.checkpoint's _load_state_dict so
+        # that per-rank checkpoints (saved without a dir-level manifest) can be read here,
+        # which happens before dcp.load() runs its own fallback.
+        metadata = None
+        try:
+            metadata = storage_reader.read_metadata()
+        except Exception:
+            logger.warning(
+                "Global metadata is not found. Falling back to rank local metadata.",
+                exc_info=True,
+            )
+
+        if (
+            metadata is None
+            and "kwargs" in inspect.signature(storage_reader.read_metadata).parameters
+        ):
+            metadata = storage_reader.read_metadata(rank=get_global_rank())
+
+        if metadata is None:
+            raise RuntimeError(
+                "Failed to read checkpoint metadata for dataloader restoration."
+            )
+
         for key in metadata.state_dict_metadata.keys():
             for phase in candidate_dataloaders.keys():
                 if (dl_key := _PHASE_DL_STATE_KEY_MAPPING[phase]) in key:

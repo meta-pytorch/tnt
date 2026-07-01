@@ -40,6 +40,7 @@ from torchtnt.framework._test_utils import (
     generate_random_dataloader,
     get_dummy_train_state,
 )
+from torchtnt.framework.callbacks._checkpoint_utils import _PHASE_DL_STATE_KEY_MAPPING
 from torchtnt.framework.callbacks.checkpointer_types import KnobOptions, RestoreOptions
 from torchtnt.framework.callbacks.dcp_saver import DistributedCheckpointSaver
 from torchtnt.framework.evaluate import evaluate
@@ -47,7 +48,11 @@ from torchtnt.framework.fit import fit
 from torchtnt.framework.predict import predict
 from torchtnt.framework.state import State
 from torchtnt.framework.train import train
-from torchtnt.utils.checkpoint import BestCheckpointConfig, get_latest_checkpoint_path
+from torchtnt.utils.checkpoint import (
+    BestCheckpointConfig,
+    get_latest_checkpoint_path,
+    Phase,
+)
 from torchtnt.utils.distributed import get_global_rank, spawn_multi_process
 from torchtnt.utils.env import seed
 from torchtnt.utils.test_utils import skip_if_not_distributed
@@ -971,6 +976,56 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
                         [*mock_load.call_args[0][0]["app_state"].state_dict().keys()],
                         expected_keys_with_dls,
                     )
+
+    def test_maybe_add_dataloader_per_rank_metadata_fallback(self) -> None:
+        # For per-rank checkpoints (saved without a dir-level manifest), the global
+        # read_metadata() raises. _maybe_add_dataloader_to_app_state should fall back
+        # to the rank-local read_metadata(rank=...), mirroring dcp's _load_state_dict.
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        rank_metadata = Metadata(
+            state_dict_metadata={f"app_state.{train_dl_key}": MagicMock()}
+        )
+
+        storage_reader = MagicMock(spec=PerRankAwareStorageReader)
+        storage_reader.read_metadata.side_effect = lambda *args, **kwargs: (
+            rank_metadata if "rank" in kwargs else _raise_no_global_metadata()
+        )
+
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        app_state = DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+            app_state={},
+            checkpoint_path=None,
+            storage_reader=storage_reader,
+            train_dataloader=stateful_dataloader,
+        )
+
+        # The global read failed, so the per-rank read must have been called with rank=.
+        rank_calls = [
+            call
+            for call in storage_reader.read_metadata.call_args_list
+            if "rank" in call.kwargs
+        ]
+        self.assertEqual(len(rank_calls), 1)
+        self.assertEqual(rank_calls[0].kwargs["rank"], get_global_rank())
+
+        # The dataloader from the rank-local metadata is added to the app state.
+        self.assertIn(train_dl_key, app_state)
+        self.assertIs(app_state[train_dl_key], stateful_dataloader)
+
+
+def _raise_no_global_metadata() -> Metadata:
+    raise AssertionError("Unknown module type rank_0")
+
+
+class PerRankAwareStorageReader:
+    """Reader whose read_metadata accepts a ``rank`` kwarg, so the per-rank fallback guard
+    (``"kwargs" in inspect.signature(...).parameters``) is satisfied during testing."""
+
+    def read_metadata(self, **kwargs: Any) -> Metadata:
+        raise NotImplementedError
 
 
 class DummyStatefulDataLoader:
