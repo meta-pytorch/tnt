@@ -82,6 +82,53 @@ class IterationTimeLoggerTest(unittest.TestCase):
             ]
         )
 
+    def test_logs_and_data_iteration_time(self) -> None:
+        """
+        Test the data-wait-inclusive "*_and_data_iteration_time" metrics are
+        logged alongside the step-only metrics for train/eval/predict.
+        """
+        logger = MagicMock(spec=MetricLogger)
+        state = MagicMock(spec=State)
+        recorded_durations = {
+            "train_iteration_time": [1, 3, 5, 7, 9],
+            "train_and_data_iteration_time": [2, 4, 6, 8, 10],
+            "eval_iteration_time": [1, 3, 5, 7, 9],
+            "eval_and_data_iteration_time": [2, 4, 6, 8, 10],
+            "predict_iteration_time": [1, 3, 5, 7, 9],
+            "predict_and_data_iteration_time": [2, 4, 6, 8, 10],
+        }
+        state.train_state.iteration_timer.recorded_durations = recorded_durations.copy()
+        state.eval_state.iteration_timer.recorded_durations = recorded_durations.copy()
+        state.predict_state.iteration_timer.recorded_durations = (
+            recorded_durations.copy()
+        )
+
+        callback = IterationTimeLogger(logger=logger, moving_avg_window=4)
+
+        train_unit = DummyTrainUnit(input_dim=2)
+        train_unit.train_progress.increment_step()
+        train_unit.train_progress.increment_step()
+        eval_unit = DummyEvalUnit(input_dim=2)
+        eval_unit.eval_progress.increment_step()
+        eval_unit.eval_progress.increment_step()
+        predict_unit = DummyPredictUnit(input_dim=2)
+        predict_unit.predict_progress.increment_step()
+        predict_unit.predict_progress.increment_step()
+
+        callback.on_train_step_end(state, train_unit)
+        callback.on_eval_step_end(state, eval_unit)
+        callback.on_predict_step_end(state, predict_unit)
+
+        # avg of last 4 of [2,4,6,8,10] is 7.0; reported for step-1 == 1
+        logger.log.assert_has_calls(
+            [
+                call("Train Iteration and Data Wait Time (seconds)", 7.0, 1),
+                call("Eval Iteration and Data Wait Time (seconds)", 7.0, 1),
+                call("Prediction Iteration and Data Wait Time (seconds)", 7.0, 1),
+            ],
+            any_order=True,
+        )
+
     def test_with_train_epoch(self) -> None:
         """
         Test IterationTimeLogger callback with train entry point
@@ -94,8 +141,9 @@ class IterationTimeLoggerTest(unittest.TestCase):
             num_samples=12, input_dim=2, batch_size=2
         )
         train(my_unit, dataloader, max_epochs=2, callbacks=[callback])
-        # 2 epochs, 6 iterations each, logging every third step
-        self.assertEqual(logger.log.call_count, 4)
+        # 2 epochs, 6 iterations each, logging every third step; each logged step
+        # emits both "train_iteration_time" and "train_and_data_iteration_time"
+        self.assertEqual(logger.log.call_count, 8)
 
     def test_comparing_step_logging_time(self) -> None:
         """
@@ -131,21 +179,46 @@ class IterationTimeLoggerTest(unittest.TestCase):
         train_iteration_timer = none_throws(
             state.train_state
         ).iteration_timer.recorded_durations["train_iteration_time"]
+        train_and_data_iteration_timer = none_throws(
+            state.train_state
+        ).iteration_timer.recorded_durations["train_and_data_iteration_time"]
         eval_iteration_timer = none_throws(
             state.eval_state
         ).iteration_timer.recorded_durations["eval_iteration_time"]
+        eval_and_data_iteration_timer = none_throws(
+            state.eval_state
+        ).iteration_timer.recorded_durations["eval_and_data_iteration_time"]
 
         expected_training_iteration_time_calls = [
             call("Train Iteration Time (seconds)", train_iteration_timer[i], i + 1)
+            for i in range(4)
+        ]
+        expected_train_and_data_iteration_time_calls = [
+            call(
+                "Train Iteration and Data Wait Time (seconds)",
+                train_and_data_iteration_timer[i],
+                i + 1,
+            )
             for i in range(4)
         ]
         expected_eval_iteration_time_calls = [
             call("Eval Iteration Time (seconds)", eval_iteration_timer[i], i + 1)
             for i in range(4)
         ]
+        expected_eval_and_data_iteration_time_calls = [
+            call(
+                "Eval Iteration and Data Wait Time (seconds)",
+                eval_and_data_iteration_timer[i],
+                i + 1,
+            )
+            for i in range(4)
+        ]
 
         logger.log.assert_has_calls(
-            expected_training_iteration_time_calls + expected_eval_iteration_time_calls,
+            expected_training_iteration_time_calls
+            + expected_train_and_data_iteration_time_calls
+            + expected_eval_iteration_time_calls
+            + expected_eval_and_data_iteration_time_calls,
             any_order=True,
         )
 
@@ -161,8 +234,9 @@ class IterationTimeLoggerTest(unittest.TestCase):
             num_samples=12, input_dim=2, batch_size=2
         )
         train(my_unit, dataloader, max_epochs=2, callbacks=[callback])
-        # 2 epochs, 6 iterations each, logging every third step
-        self.assertEqual(logger.add_scalar.call_count, 4)
+        # 2 epochs, 6 iterations each, logging every third step; each logged step
+        # emits both "train_iteration_time" and "train_and_data_iteration_time"
+        self.assertEqual(logger.add_scalar.call_count, 8)
 
     def test_warmup_steps(self) -> None:
         logger = MagicMock(spec=MetricLogger)

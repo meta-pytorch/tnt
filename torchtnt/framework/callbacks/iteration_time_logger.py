@@ -77,8 +77,11 @@ class IterationTimeLogger(Callback):
 
         human_metric_names = {
             "train_iteration_time": "Train Iteration Time (seconds)",
+            "train_and_data_iteration_time": "Train Iteration and Data Wait Time (seconds)",
             "eval_iteration_time": "Eval Iteration Time (seconds)",
+            "eval_and_data_iteration_time": "Eval Iteration and Data Wait Time (seconds)",
             "predict_iteration_time": "Prediction Iteration Time (seconds)",
+            "predict_and_data_iteration_time": "Prediction Iteration and Data Wait Time (seconds)",
         }
 
         time_list = iteration_timer.recorded_durations.get(metric_label, [])
@@ -101,52 +104,46 @@ class IterationTimeLogger(Callback):
 
     def on_train_step_end(self, state: State, unit: TTrainUnit) -> None:
         timer = none_throws(state.train_state).iteration_timer
-        self._log_step_metrics(
-            "train_iteration_time",
-            timer,
-            # on_train_step_end happens after the num steps is incremented, but before the timer list is populated,
-            # so it logs for step-1
-            unit.train_progress.num_steps_completed - 1,
-        )
+        # on_train_step_end happens after the num steps is incremented, but before the timer lists are populated,
+        # so it logs for step-1
+        step_logging_for = unit.train_progress.num_steps_completed - 1
+        self._log_step_metrics("train_iteration_time", timer, step_logging_for)
+        self._log_step_metrics("train_and_data_iteration_time", timer, step_logging_for)
 
     def on_train_end(self, state: State, unit: TTrainUnit) -> None:
-        self._log_step_metrics(
-            "train_iteration_time",
-            none_throws(state.train_state).iteration_timer,
-            unit.train_progress.num_steps_completed,
-        )
+        timer = none_throws(state.train_state).iteration_timer
+        step_logging_for = unit.train_progress.num_steps_completed
+        self._log_step_metrics("train_iteration_time", timer, step_logging_for)
+        self._log_step_metrics("train_and_data_iteration_time", timer, step_logging_for)
 
     def on_eval_step_end(self, state: State, unit: TEvalUnit) -> None:
         timer = none_throws(state.eval_state).iteration_timer
-        self._log_step_metrics(
-            "eval_iteration_time",
-            timer,
-            # on_eval_step_end happens after the num steps is incremented, but before the timer list is populated,
-            # so it logs for step-1
-            unit.eval_progress.num_steps_completed - 1,
-        )
+        # on_eval_step_end happens after the num steps is incremented, but before the timer lists are populated,
+        # so it logs for step-1
+        step_logging_for = unit.eval_progress.num_steps_completed - 1
+        self._log_step_metrics("eval_iteration_time", timer, step_logging_for)
+        self._log_step_metrics("eval_and_data_iteration_time", timer, step_logging_for)
 
     def on_eval_end(self, state: State, unit: TEvalUnit) -> None:
-        self._log_step_metrics(
-            "eval_iteration_time",
-            none_throws(state.eval_state).iteration_timer,
-            unit.eval_progress.num_steps_completed,
-        )
+        timer = none_throws(state.eval_state).iteration_timer
+        step_logging_for = unit.eval_progress.num_steps_completed
+        self._log_step_metrics("eval_iteration_time", timer, step_logging_for)
+        self._log_step_metrics("eval_and_data_iteration_time", timer, step_logging_for)
 
     def on_predict_step_end(self, state: State, unit: TPredictUnit) -> None:
         timer = none_throws(state.predict_state).iteration_timer
+        # on_predict_step_end happens after the num steps is incremented, but before the timer lists are populated,
+        # so it logs for step-1
+        step_logging_for = unit.predict_progress.num_steps_completed - 1
+        self._log_step_metrics("predict_iteration_time", timer, step_logging_for)
         self._log_step_metrics(
-            "predict_iteration_time",
-            timer,
-            # on_predict_step_end happens after the num steps is incremented, but before the timer list is populated,
-            # so it logs for step-1
-            unit.predict_progress.num_steps_completed - 1,
+            "predict_and_data_iteration_time", timer, step_logging_for
         )
 
     def on_predict_end(self, state: State, unit: TPredictUnit) -> None:
         timer = none_throws(state.predict_state).iteration_timer
+        step_logging_for = unit.predict_progress.num_steps_completed
+        self._log_step_metrics("predict_iteration_time", timer, step_logging_for)
         self._log_step_metrics(
-            "predict_iteration_time",
-            timer,
-            unit.predict_progress.num_steps_completed,
+            "predict_and_data_iteration_time", timer, step_logging_for
         )
