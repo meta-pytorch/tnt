@@ -177,6 +177,11 @@ class EvaluateTest(unittest.TestCase):
                     # pyrefly: ignore [missing-attribute]
                     state.eval_state.iteration_timer.recorded_durations,
                 )
+                assertInTest(
+                    "eval_and_data_iteration_time",
+                    # pyrefly: ignore [missing-attribute]
+                    state.eval_state.iteration_timer.recorded_durations,
+                )
 
         check_timer_callback = CheckTimerUsedCallback()
 

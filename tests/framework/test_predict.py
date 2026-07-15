@@ -150,6 +150,11 @@ class PredictTest(unittest.TestCase):
                     # pyrefly: ignore [missing-attribute]
                     state.predict_state.iteration_timer.recorded_durations,
                 )
+                assertInTest(
+                    "predict_and_data_iteration_time",
+                    # pyrefly: ignore [missing-attribute]
+                    state.predict_state.iteration_timer.recorded_durations,
+                )
 
         check_timer_callback = CheckTimerUsedCallback()
 

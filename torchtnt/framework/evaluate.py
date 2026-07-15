@@ -148,22 +148,23 @@ def _evaluate_impl(
         )
     ):
         try:
-            with get_timing_context(
-                state, "evaluate.next(data_iter)"
-            ), eval_state.iteration_timer.time("data_wait_time"):
-                callback_handler.on_eval_get_next_batch_start(state, eval_unit)
-                step_input = eval_unit.get_next_eval_batch(state, data_iter)
-                callback_handler.on_eval_get_next_batch_end(state, eval_unit)
+            with eval_state.iteration_timer.time("eval_and_data_iteration_time"):
+                with get_timing_context(
+                    state, "evaluate.next(data_iter)"
+                ), eval_state.iteration_timer.time("data_wait_time"):
+                    callback_handler.on_eval_get_next_batch_start(state, eval_unit)
+                    step_input = eval_unit.get_next_eval_batch(state, data_iter)
+                    callback_handler.on_eval_get_next_batch_end(state, eval_unit)
 
-            with eval_state.iteration_timer.time("eval_iteration_time"):
-                callback_handler.on_eval_step_start(state, eval_unit)
-                eval_state._step_output = eval_unit.eval_step(state, step_input)
+                with eval_state.iteration_timer.time("eval_iteration_time"):
+                    callback_handler.on_eval_step_start(state, eval_unit)
+                    eval_state._step_output = eval_unit.eval_step(state, step_input)
 
-                eval_unit.eval_progress.increment_step()
-                callback_handler.on_eval_step_end(state, eval_unit)
+                    eval_unit.eval_progress.increment_step()
+                    callback_handler.on_eval_step_end(state, eval_unit)
 
-                # clear step_output to avoid retaining extra memory
-                eval_state._step_output = None
+                    # clear step_output to avoid retaining extra memory
+                    eval_state._step_output = None
 
             if (
                 eval_unit.eval_progress.num_steps_completed_in_epoch

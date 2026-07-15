@@ -169,24 +169,27 @@ def _predict_impl(
         )
     ):
         try:
-            with get_timing_context(
-                state, "predict.next(data_iter)"
-            ), predict_state.iteration_timer.time("data_wait_time"):
-                callback_handler.on_predict_get_next_batch_start(state, predict_unit)
-                step_input = predict_unit.get_next_predict_batch(state, data_iter)
-                callback_handler.on_predict_get_next_batch_end(state, predict_unit)
+            with predict_state.iteration_timer.time("predict_and_data_iteration_time"):
+                with get_timing_context(
+                    state, "predict.next(data_iter)"
+                ), predict_state.iteration_timer.time("data_wait_time"):
+                    callback_handler.on_predict_get_next_batch_start(
+                        state, predict_unit
+                    )
+                    step_input = predict_unit.get_next_predict_batch(state, data_iter)
+                    callback_handler.on_predict_get_next_batch_end(state, predict_unit)
 
-            with predict_state.iteration_timer.time("predict_iteration_time"):
-                callback_handler.on_predict_step_start(state, predict_unit)
-                predict_state._step_output = predict_unit.predict_step(
-                    state, step_input
-                )
+                with predict_state.iteration_timer.time("predict_iteration_time"):
+                    callback_handler.on_predict_step_start(state, predict_unit)
+                    predict_state._step_output = predict_unit.predict_step(
+                        state, step_input
+                    )
 
-                predict_unit.predict_progress.increment_step()
-                callback_handler.on_predict_step_end(state, predict_unit)
+                    predict_unit.predict_progress.increment_step()
+                    callback_handler.on_predict_step_end(state, predict_unit)
 
-                # clear step_output to avoid retaining extra memory
-                predict_state._step_output = None
+                    # clear step_output to avoid retaining extra memory
+                    predict_state._step_output = None
 
             if (
                 predict_unit.predict_progress.num_steps_completed_in_epoch
