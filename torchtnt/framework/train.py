@@ -245,21 +245,22 @@ def _train_epoch_impl(
         )
     ):
         try:
-            with get_timing_context(
-                state, "train.next(data_iter)"
-            ), train_state.iteration_timer.time("data_wait_time"):
-                callback_handler.on_train_get_next_batch_start(state, train_unit)
-                step_input = train_unit.get_next_train_batch(state, data_iter)
-                callback_handler.on_train_get_next_batch_end(state, train_unit)
+            with train_state.iteration_timer.time("train_and_data_iteration_time"):
+                with get_timing_context(
+                    state, "train.next(data_iter)"
+                ), train_state.iteration_timer.time("data_wait_time"):
+                    callback_handler.on_train_get_next_batch_start(state, train_unit)
+                    step_input = train_unit.get_next_train_batch(state, data_iter)
+                    callback_handler.on_train_get_next_batch_end(state, train_unit)
 
-            with train_state.iteration_timer.time("train_iteration_time"):
-                callback_handler.on_train_step_start(state, train_unit)
-                train_state._step_output = train_unit.train_step(state, step_input)
-                train_unit.train_progress.increment_step()
-                callback_handler.on_train_step_end(state, train_unit)
+                with train_state.iteration_timer.time("train_iteration_time"):
+                    callback_handler.on_train_step_start(state, train_unit)
+                    train_state._step_output = train_unit.train_step(state, step_input)
+                    train_unit.train_progress.increment_step()
+                    callback_handler.on_train_step_end(state, train_unit)
 
-                # clear step_output to avoid retaining extra memory
-                train_state._step_output = None
+                    # clear step_output to avoid retaining extra memory
+                    train_state._step_output = None
 
             if (
                 train_unit.train_progress.num_steps_completed_in_epoch
