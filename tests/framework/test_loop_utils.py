@@ -12,12 +12,10 @@ from typing import cast, Dict
 
 import torch
 from torch import distributed as dist, nn
-
-# pyre-fixme[21]: Could not find module `torch.ao.quantization.pt2e.export_utils`.
-from torch.ao.quantization.pt2e.export_utils import model_is_exported
 from torch.distributed import launcher
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+from torchao.quantization.pt2e.export_utils import model_is_exported
 from torchtnt.framework._loop_utils import (
     _is_done,
     _is_epoch_done,
