@@ -175,8 +175,11 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
         # we create a new gloo process group if different backend is being used
         if dist.get_backend(process_group) != dist.Backend.GLOO:
             rank_zero_info("Creating new gloo process group for checkpointing.")
-            self._process_group = dist.new_group(
-                timeout=timedelta(seconds=3600), backend=dist.Backend.GLOO
+            self._process_group = cast(
+                dist.ProcessGroup,
+                dist.new_group(
+                    timeout=timedelta(seconds=3600), backend=dist.Backend.GLOO
+                ),
             )
         else:
             self._process_group = process_group
