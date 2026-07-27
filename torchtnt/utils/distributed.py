@@ -9,6 +9,7 @@
 
 import logging
 import os
+import shutil
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -557,7 +558,7 @@ def sync_bool(
 @dataclass
 class ProcessGroupSetupParams:
     backend: str
-    port: str
+    rdzv_file: str
     world_size: int
     timeout_s: int
 
@@ -571,7 +572,7 @@ def spawn_multi_process(
 ) -> List[TReturn]:
     """
     Spawn single node, multi-rank function.
-    Uses localhost and free port to communicate.
+    Ranks rendezvous over a unique per-call FileStore to communicate.
 
     Args:
         world_size: number of processes
@@ -589,35 +590,48 @@ def spawn_multi_process(
         A list, l, where l[i] is the return value of method(*method_args, **methods_kwargs) on rank i
     """
     mp_init_mode = "spawn" if torch.version.hip is not None else None
-    manager = SyncManager(ctx=multiprocessing.get_context(mp_init_mode))
-    manager.start()
-    mp_output_dict = manager.dict()
+    # Rendezvous over a unique per-call FileStore instead of a TCP port. A free
+    # port from get_free_port() is released before the child ranks bind, so it can
+    # be grabbed by another process or linger in TIME_WAIT, which made repeated
+    # single-node spawns flake with rendezvous timeouts. The temp dir is cleaned
+    # in the outer finally so it is removed even if the manager fails to start or
+    # to shut down.
+    rdzv_dir = tempfile.mkdtemp(prefix="tnt_spawn_pg_")
+    try:
+        manager = SyncManager(ctx=multiprocessing.get_context(mp_init_mode))
+        manager.start()
+        try:
+            mp_output_dict = manager.dict()
 
-    port = str(get_free_port())
-    torch.multiprocessing.spawn(
-        # torch.multiprocessing.spawn sends rank as the first param
-        # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
-        _init_pg_and_rank_and_launch_method,
-        args=(
-            ProcessGroupSetupParams(
-                backend=backend,
-                port=port,
-                world_size=world_size,
-                timeout_s=method_kwargs.pop("timeout_s", 60),
-            ),
-            mp_output_dict,
-            method,
-            method_args,
-            method_kwargs,
-        ),
-        nprocs=world_size,
-    )
+            torch.multiprocessing.spawn(
+                # torch.multiprocessing.spawn sends rank as the first param
+                # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
+                _init_pg_and_rank_and_launch_method,
+                args=(
+                    ProcessGroupSetupParams(
+                        backend=backend,
+                        rdzv_file=os.path.join(rdzv_dir, "rdzv"),
+                        world_size=world_size,
+                        timeout_s=method_kwargs.pop("timeout_s", 60),
+                    ),
+                    mp_output_dict,
+                    method,
+                    method_args,
+                    method_kwargs,
+                ),
+                nprocs=world_size,
+            )
 
-    output_list = []
-    for i in range(world_size):
-        output_list.append(mp_output_dict[i])
+            output_list = []
+            for i in range(world_size):
+                output_list.append(mp_output_dict[i])
 
-    return output_list
+            return output_list
+        finally:
+            # Release the manager so repeated spawns do not leak a helper process or fds.
+            manager.shutdown()
+    finally:
+        shutil.rmtree(rdzv_dir, ignore_errors=True)
 
 
 def _init_pg_and_rank_and_launch_method(
@@ -628,14 +642,14 @@ def _init_pg_and_rank_and_launch_method(
     args: List[object],
     kwargs: Dict[str, object],
 ) -> None:
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = pg_setup_params.port
     os.environ["WORLD_SIZE"] = str(pg_setup_params.world_size)
     os.environ["LOCAL_RANK"] = str(rank)
+    store = dist.FileStore(pg_setup_params.rdzv_file, pg_setup_params.world_size)
     dist.init_process_group(
         rank=rank,
         world_size=pg_setup_params.world_size,
         backend=pg_setup_params.backend,
+        store=store,
         timeout=timedelta(  # setting up timeout for distributed collectives
             seconds=pg_setup_params.timeout_s
         ),
