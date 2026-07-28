@@ -9,7 +9,7 @@
 
 import os
 import unittest
-from typing import Callable, Literal, Optional, Union
+from typing import Callable, cast, Literal, Optional, Union
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
@@ -528,7 +528,7 @@ class DistributedTest(unittest.TestCase):
 
         # Test creating new gloo candidate pg - no op
         mock_destroy_process_group.reset_mock()
-        gloo_pg = dist.new_group(backend=dist.Backend.GLOO)
+        gloo_pg = cast(ProcessGroup, dist.new_group(backend=dist.Backend.GLOO))
         with get_or_create_gloo_pg(gloo_pg) as pg:
             tc.assertIs(pg, gloo_pg)
 
@@ -551,7 +551,7 @@ class DistributedTest(unittest.TestCase):
         # Test exception handling with existing pg - forward exception, group should not be destroyed
         mock_destroy_process_group.reset_mock()
         with tc.assertRaisesRegex(Exception, "Test Exception"):
-            gloo_pg = dist.new_group(backend=dist.Backend.GLOO)
+            gloo_pg = cast(ProcessGroup, dist.new_group(backend=dist.Backend.GLOO))
             with get_or_create_gloo_pg(gloo_pg) as pg:
                 tc.assertIs(pg, gloo_pg)
                 raise Exception("Test Exception")
