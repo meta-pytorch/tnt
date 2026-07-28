@@ -385,8 +385,8 @@ class RandomizedBatchSamplerIterator(MultiIterator):
                 name: torch.IntTensor([idx])
                 for idx, name in enumerate(self._iterator_names)
             }
-            self._process_group: dist.ProcessGroup = dist.new_group(
-                backend="gloo", ranks=None
+            self._process_group: dist.ProcessGroup = cast(
+                dist.ProcessGroup, dist.new_group(backend="gloo", ranks=None)
             )
 
         self._iterators_finished: List[str] = []
