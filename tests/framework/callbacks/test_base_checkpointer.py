@@ -89,8 +89,10 @@ class BaseCheckpointSaver(BaseCheckpointer):
         self, state: State, unit: AppStateMixin, checkpoint_id: str, hook: str
     ) -> bool:
         self._latest_checkpoint_path = checkpoint_id
-        if not os.path.exists(checkpoint_id):
-            os.mkdir(checkpoint_id)
+        # exist_ok guards against a benign race: in distributed tests every rank
+        # shares rank 0's synced dirpath and generates the same checkpoint path,
+        # so concurrent ranks may create this directory at the same time.
+        os.makedirs(checkpoint_id, exist_ok=True)
         return True
 
     @staticmethod
