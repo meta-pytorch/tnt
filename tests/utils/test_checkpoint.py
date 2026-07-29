@@ -258,6 +258,21 @@ class CheckpointPathTest(unittest.TestCase):
                     metric_data=MetricData("eval_loss", 6.486097566010406e18),
                 ),
             ),
+            # phase-naive checkpoints under a dirpath that contains a phase
+            # marker are still phase-naive
+            (
+                "foo/eval_step_sweeps/epoch_2_step_1_acc=0.98",
+                CheckpointPath(
+                    "foo/eval_step_sweeps",
+                    epoch=2,
+                    step={Phase.NONE: 1},
+                    metric_data=MetricData("acc", 0.98),
+                ),
+            ),
+            (
+                "foo/train_step_dir/epoch_2_step_1",
+                CheckpointPath("foo/train_step_dir", epoch=2, step=1),
+            ),
         ]
         for path, expected_ckpt in valid_paths:
             parsed_ckpt = CheckpointPath.from_str(path)
