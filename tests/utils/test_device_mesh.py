@@ -134,6 +134,44 @@ class TestGlobalMeshCoordinator(unittest.TestCase):
         tc.assertEqual(get_dp_mesh_size(gmc), 2)
         tc.assertEqual(get_dp_local_rank(gmc), get_global_rank() // 2)
 
+    def test_fsdp_mesh(self) -> None:
+        spawn_multi_process(4, "gloo", self._test_fsdp_mesh)
+
+    @staticmethod
+    def _test_fsdp_mesh() -> None:
+        """fsdp_mesh preserves the 2-D (dp_replicate, fsdp) grid under HSDP."""
+        tc = unittest.TestCase()
+
+        # dp_replicate=1 → 1-D fsdp mesh, identical to dense_fsdp_mesh.
+        gmc = GlobalMeshCoordinator(
+            dp_shard=-1, dp_replicate=1, tp=None, device_type="cpu"
+        )
+        tc.assertEqual(gmc.fsdp_mesh.ndim, 1)
+        tc.assertEqual(gmc.fsdp_mesh.mesh_dim_names, ("fsdp",))
+        tc.assertEqual(gmc.fsdp_mesh.size(), 4)
+
+        # dp_replicate=2 (world=4) → HSDP path: un-flattened 2-D mesh, whereas
+        # dp_mesh flattens to the 1-D dp_dense composite axis. This 2-D mesh is
+        # exactly what fully_shard consumes to do HSDP.
+        gmc = GlobalMeshCoordinator(
+            dp_shard=-1, dp_replicate=2, tp=None, device_type="cpu"
+        )
+        tc.assertEqual(gmc.fsdp_mesh.ndim, 2)
+        tc.assertEqual(gmc.fsdp_mesh.mesh_dim_names, ("dp_replicate", "fsdp"))
+        tc.assertEqual(gmc.fsdp_mesh.size(), 4)
+        tc.assertEqual(gmc.fsdp_mesh["dp_replicate"].size(), 2)
+        tc.assertEqual(gmc.fsdp_mesh["fsdp"].size(), 2)
+        # dp_mesh stays the flattened 1-D composite for DP-group consumers.
+        tc.assertEqual(gmc.dp_mesh.ndim, 1)
+
+        # tp=2, dp_replicate=1 → 1-D fsdp mesh of size world / tp = 2.
+        gmc = GlobalMeshCoordinator(
+            dp_shard=-1, dp_replicate=1, tp=2, device_type="cpu"
+        )
+        tc.assertEqual(gmc.fsdp_mesh.ndim, 1)
+        tc.assertEqual(gmc.fsdp_mesh.mesh_dim_names, ("fsdp",))
+        tc.assertEqual(gmc.fsdp_mesh.size(), 2)
+
 
 class TestSharedAxisRegimeValidator(unittest.TestCase):
     """3-regime validator coverage (SA-A: plan §2.1)."""
