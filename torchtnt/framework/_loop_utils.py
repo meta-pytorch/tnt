@@ -33,6 +33,7 @@ except Exception:
         pass
 
 
+from torchtnt.utils.data.multi_dataloader import MultiDataLoader
 from torchtnt.utils.progress import Progress
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -96,6 +97,9 @@ def _maybe_set_distributed_sampler_epoch(
             dataloader.sampler.set_epoch(current_epoch)
         elif isinstance(dataloader.batch_sampler, _DistributedSampler):
             dataloader.batch_sampler.set_epoch(current_epoch)
+    elif isinstance(dataloader, MultiDataLoader):
+        for child in dataloader.individual_dataloaders.values():
+            _maybe_set_distributed_sampler_epoch(child, current_epoch)
 
 
 def _set_module_training_mode(
