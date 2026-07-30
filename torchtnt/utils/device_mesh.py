@@ -126,6 +126,28 @@ class GlobalMeshCoordinator:
         return self.device_mesh._dense_view["fsdp"]
 
     @property
+    def fsdp_mesh(self) -> DeviceMesh:
+        """FSDP2 wrapping mesh for DENSE params, preserving the HSDP 2-D grid.
+
+        Unlike :attr:`dense_fsdp_mesh` — which FLATTENS ``(dp_replicate, fsdp)``
+        into one 1-D axis so DP-group / dataloader consumers see a single
+        composite data-parallel mesh — this returns the UN-flattened 2-D
+        ``(dp_replicate, fsdp)`` mesh when ``dp_replicate > 1``. Passing that
+        2-D mesh to ``fully_shard`` yields true HSDP: parameters are sharded
+        within each replica group (the ``fsdp`` axis) and replicated across
+        groups (the ``dp_replicate`` axis).
+
+        Falls back to the 1-D ``fsdp`` sub-mesh when ``dp_replicate == 1``
+        (no replication -> plain FSDP ``FULL_SHARD``), so callers that do not
+        opt into HSDP see identical behavior to :attr:`dense_fsdp_mesh`.
+        """
+        if self._dp_replicate_enabled:
+            # pyre-ignore[16]
+            return self.device_mesh._dense_view["dp_replicate", "fsdp"]
+        # pyre-ignore[16]
+        return self.device_mesh._dense_view["fsdp"]
+
+    @property
     def tp_mesh(self) -> Optional[DeviceMesh]:
         """TP grid of size ``tp``. Returns ``None`` when ``tp == 1``.
 
