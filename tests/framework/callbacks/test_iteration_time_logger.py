@@ -268,3 +268,36 @@ class IterationTimeLoggerTest(unittest.TestCase):
             ValueError, "warmup_steps must be at least 0, got -1"
         ):
             IterationTimeLogger(logger=logger, warmup_steps=-1)
+
+
+class IterationTimeLoggerWarmupWindowTest(unittest.TestCase):
+    """moving_avg_window must not reach back past the warmup boundary."""
+
+    def _timer(self, durations: list[float]) -> MagicMock:
+        timer = MagicMock()
+        timer.recorded_durations = {"train_iteration_time": durations}
+        return timer
+
+    def test_window_clamped_to_post_warmup_samples(self) -> None:
+        logger = MagicMock(spec=MetricLogger)
+        callback = IterationTimeLogger(
+            logger, moving_avg_window=10, log_every_n_steps=5, warmup_steps=5
+        )
+        # Step 1 is a 900s dataloader ramp; steps 2-10 are the 1s steady state.
+        durations = [900.0] + [1.0] * 9
+        callback._log_step_metrics("train_iteration_time", self._timer(durations), 10)
+
+        # Unclamped this averages all 10 (90.9). Clamped it averages steps 6-10.
+        self.assertEqual(1, logger.log.call_count)
+        self.assertAlmostEqual(1.0, logger.log.call_args.args[1])
+
+    def test_window_unchanged_when_warmup_exceeds_window(self) -> None:
+        logger = MagicMock(spec=MetricLogger)
+        callback = IterationTimeLogger(
+            logger, moving_avg_window=3, log_every_n_steps=5, warmup_steps=10
+        )
+        durations = [900.0] + [1.0] * 14
+        callback._log_step_metrics("train_iteration_time", self._timer(durations), 15)
+
+        # warmup(10) >= window(3): behavior is identical to before the clamp.
+        self.assertAlmostEqual(1.0, logger.log.call_args.args[1])
