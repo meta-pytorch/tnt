@@ -88,7 +88,10 @@ class IterationTimeLogger(Callback):
         if not time_list:
             return
 
-        last_n_values = time_list[-self.moving_avg_window :]
+        # warmup_steps must gate what is averaged, not just when to log.
+        post_warmup_samples = max(1, len(time_list) - self.warmup_steps)
+        window = min(self.moving_avg_window, post_warmup_samples)
+        last_n_values = time_list[-window:]
         if isinstance(self._logger, SummaryWriter):
             self._logger.add_scalar(
                 human_metric_names[metric_label],
