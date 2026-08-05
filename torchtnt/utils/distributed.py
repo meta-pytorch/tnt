@@ -838,7 +838,7 @@ def get_or_create_gloo_pg(
     Context manager to ensure that a gloo process group is used for the contained operations. First checks if the
     WORLD process group, or the provided candidate process group, is already gloo-based. In case it is, that is returned.
     Otherwise, a new gloo process group will be created and returned. Upon exiting the context, if a new process group
-    was created, it will be destroyed.
+    was created, all ranks will be synchronized before it is destroyed.
 
     Note: If the distributed environment is not initialized, this context manager will return None and will be no-op.
 
@@ -852,11 +852,14 @@ def get_or_create_gloo_pg(
         pg = None
 
     else:
-        pg = candidate_pg or dist.group.WORLD
+        pg = candidate_pg or cast(dist.ProcessGroup, dist.group.WORLD)
         if dist.get_backend(pg) != dist.Backend.GLOO:
             logger.info("Creating temporary gloo process group")
-            pg = dist.new_group(
-                timeout=timedelta(seconds=3600), backend=dist.Backend.GLOO
+            pg = cast(
+                dist.ProcessGroup,
+                dist.new_group(
+                    timeout=timedelta(seconds=3600), backend=dist.Backend.GLOO
+                ),
             )
             gloo_pg_created = True
 
@@ -866,5 +869,8 @@ def get_or_create_gloo_pg(
     finally:
         # Cleanup temporary gloo pg if it was created
         if gloo_pg_created:
-            dist.destroy_process_group(pg)
+            try:
+                dist.barrier(group=pg)
+            finally:
+                dist.destroy_process_group(pg)
             logger.info("Destroyed temporary gloo process group")

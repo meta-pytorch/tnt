@@ -489,7 +489,10 @@ class DistributedTest(unittest.TestCase):
 
     @staticmethod
     @patch("torchtnt.utils.distributed.dist.destroy_process_group")
-    def _test_get_or_create_gloo_pg(mock_destroy_process_group: MagicMock) -> None:
+    @patch("torchtnt.utils.distributed.dist.barrier")
+    def _test_get_or_create_gloo_pg(
+        mock_barrier: MagicMock, mock_destroy_process_group: MagicMock
+    ) -> None:
 
         # Get a side effect for the get_backend function that returns NCCL the first time it is called,
         # and then will return GLOO for subsequent calls. For use with _test_get_or_create_gloo_pg.
@@ -508,6 +511,13 @@ class DistributedTest(unittest.TestCase):
             return get_backend
 
         tc = unittest.TestCase()
+        cleanup_events = []
+        mock_barrier.side_effect = lambda *, group: cleanup_events.append(
+            ("barrier", group)
+        )
+        mock_destroy_process_group.side_effect = lambda group: cleanup_events.append(
+            ("destroy", group)
+        )
 
         # Test not distributed - no-op
         with patch(
@@ -518,6 +528,7 @@ class DistributedTest(unittest.TestCase):
                 tc.assertIsNone(pg)
 
         mock_destroy_process_group.assert_not_called()
+        mock_barrier.assert_not_called()
 
         # Test no-op since gloo pg already exists
         mock_destroy_process_group.reset_mock()
@@ -525,6 +536,7 @@ class DistributedTest(unittest.TestCase):
             tc.assertIs(pg, dist.group.WORLD)
 
         mock_destroy_process_group.assert_not_called()
+        mock_barrier.assert_not_called()
 
         # Test creating new gloo candidate pg - no op
         mock_destroy_process_group.reset_mock()
@@ -533,6 +545,7 @@ class DistributedTest(unittest.TestCase):
             tc.assertIs(pg, gloo_pg)
 
         mock_destroy_process_group.assert_not_called()
+        mock_barrier.assert_not_called()
 
         # Test with NCCL backend - should create a new gloo pg and destroy
         mock_destroy_process_group.reset_mock()
@@ -546,10 +559,14 @@ class DistributedTest(unittest.TestCase):
                 tc.assertIsNot(pg, dist.group.WORLD)
                 tc.assertEqual(pg._get_backend_name(), dist.Backend.GLOO)
 
+        mock_barrier.assert_called_once_with(group=pg)
         mock_destroy_process_group.assert_called_once_with(pg)
+        tc.assertEqual(cleanup_events, [("barrier", pg), ("destroy", pg)])
 
         # Test exception handling with existing pg - forward exception, group should not be destroyed
         mock_destroy_process_group.reset_mock()
+        mock_barrier.reset_mock()
+        cleanup_events.clear()
         with tc.assertRaisesRegex(Exception, "Test Exception"):
             gloo_pg = cast(ProcessGroup, dist.new_group(backend=dist.Backend.GLOO))
             with get_or_create_gloo_pg(gloo_pg) as pg:
@@ -557,9 +574,12 @@ class DistributedTest(unittest.TestCase):
                 raise Exception("Test Exception")
 
         mock_destroy_process_group.assert_not_called()
+        mock_barrier.assert_not_called()
 
         # Test exception handling with new pg - forward exception, group should be destroyed
         mock_destroy_process_group.reset_mock()
+        mock_barrier.reset_mock()
+        cleanup_events.clear()
         with tc.assertRaisesRegex(Exception, "Test Exception"):
             with patch(
                 "torchtnt.utils.distributed.dist.get_backend",
@@ -572,7 +592,51 @@ class DistributedTest(unittest.TestCase):
                     )
                     raise Exception("Test Exception")
 
+        mock_barrier.assert_called_once_with(group=pg)
         mock_destroy_process_group.assert_called_once_with(pg)
+        tc.assertEqual(cleanup_events, [("barrier", pg), ("destroy", pg)])
+
+        # Test that a cleanup barrier failure is propagated after the group is destroyed
+        mock_destroy_process_group.reset_mock()
+        mock_barrier.reset_mock()
+        mock_barrier.side_effect = RuntimeError("Barrier cleanup failed")
+        cleanup_events.clear()
+        with tc.assertRaisesRegex(RuntimeError, "Barrier cleanup failed"):
+            with patch(
+                "torchtnt.utils.distributed.dist.get_backend",
+                side_effect=_get_backend_side_effect(),
+            ):
+                with get_or_create_gloo_pg() as pg:
+                    tc.assertIsNot(pg, dist.group.WORLD)
+                    tc.assertEqual(
+                        none_throws(pg)._get_backend_name(), dist.Backend.GLOO
+                    )
+
+        mock_barrier.assert_called_once_with(group=pg)
+        mock_destroy_process_group.assert_called_once_with(pg)
+
+    @skip_if_not_distributed
+    def test_get_or_create_gloo_pg_real_cleanup(self) -> None:
+        spawn_multi_process(2, "gloo", self._test_get_or_create_gloo_pg_real_cleanup)
+
+    @staticmethod
+    def _test_get_or_create_gloo_pg_real_cleanup() -> None:
+        tc = unittest.TestCase()
+        real_get_backend = dist.get_backend
+
+        def get_backend(pg: Optional[ProcessGroup]) -> str:
+            if pg is dist.group.WORLD:
+                return dist.Backend.NCCL
+            return real_get_backend(pg)
+
+        with patch(
+            "torchtnt.utils.distributed.dist.get_backend", side_effect=get_backend
+        ):
+            with get_or_create_gloo_pg() as pg:
+                pg = none_throws(pg)
+                value = torch.tensor([dist.get_rank() + 1])
+                dist.all_reduce(value, group=pg)
+                tc.assertEqual(value.item(), 3)
 
     @skip_if_not_distributed
     def test_broadcast_str_fixed_buffer_size(self) -> None:
