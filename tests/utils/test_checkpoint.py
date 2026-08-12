@@ -1137,6 +1137,12 @@ class CheckpointUtilsTest(unittest.TestCase):
                 best_path,
             )
 
+            # apply sanitation
+            self.assertEqual(
+                get_best_checkpoint_path(temp_dir, "val/loss", "min"),
+                best_path,
+            )
+
             # handle negative values
             best_path_2 = os.path.join(temp_dir, "epoch_0_step_0_val_loss=-0.01")
             os.mkdir(best_path_2)
@@ -1367,6 +1373,15 @@ class CheckpointUtilsTest(unittest.TestCase):
                 {
                     str(x)
                     for x in get_checkpoint_dirpaths(temp_dir, metric_name="val_loss")
+                },
+                {path1, path2, path3},
+            )
+
+            # with metric name sanitation
+            self.assertEqual(
+                {
+                    str(x)
+                    for x in get_checkpoint_dirpaths(temp_dir, metric_name="val/loss")
                 },
                 {path1, path2, path3},
             )
