@@ -62,9 +62,9 @@ class TestCheckpointUtilsGPU(unittest.TestCase):
         )
 
         # Broadcast temp_dir to verify successful execution
-        temp_dir = [temp_dir] if get_global_rank() == 0 else [None]
-        dist.broadcast_object_list(temp_dir, src=0, group=dist.group.WORLD)
-        temp_dir = temp_dir[0]
+        temp_dir_list: list[str | None] = [temp_dir]
+        dist.broadcast_object_list(temp_dir_list, src=0, group=dist.group.WORLD)
+        temp_dir = temp_dir_list[0]
         tc.assertIsNotNone(temp_dir)
 
         tc.assertEqual(
