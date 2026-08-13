@@ -10,6 +10,7 @@ import pickle
 import shutil
 import tempfile
 import unittest
+from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
 
 import torch
@@ -900,6 +901,56 @@ class CheckpointManagerTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(temp_dir, "epoch_0_step_0")))
             self.assertTrue(os.path.exists(os.path.join(temp_dir, "epoch_0_step_1")))
             self.assertEqual(ckpt_manager._ckpt_paths, [CheckpointPath(temp_dir, 0, 1)])
+
+    def test_remove_worst_checkpoint_in_background(self) -> None:
+        file_system = MagicMock()
+        removal_future: Future[None] = Future()
+        file_system.rm_in_background.return_value = removal_future
+        ckpt_manager = CheckpointManager("foo", file_system=file_system)
+        checkpoint = CheckpointPath("foo", 0, 0)
+        ckpt_manager._ckpt_paths = [checkpoint]
+
+        ckpt_manager.remove_checkpoint()
+
+        file_system.rm_in_background.assert_called_once_with(
+            checkpoint.path, recursive=True
+        )
+        file_system.rm.assert_not_called()
+        self.assertEqual(ckpt_manager._ckpt_paths, [])
+        self.assertFalse(removal_future.done())
+        removal_future.set_result(None)
+
+    def test_remove_worst_checkpoint_background_exception(self) -> None:
+        file_system = MagicMock()
+        removal_future: Future[None] = Future()
+        file_system.rm_in_background.return_value = removal_future
+        ckpt_manager = CheckpointManager("foo", file_system=file_system)
+        checkpoint = CheckpointPath("foo", 0, 0)
+        ckpt_manager._ckpt_paths = [checkpoint]
+
+        with patch("torchtnt.utils.checkpoint.logging.Logger.error") as log_mock:
+            ckpt_manager.remove_checkpoint()
+            removal_future.set_exception(Exception("purge failed"))
+
+        log_mock.assert_called_once()
+        log_message = log_mock.call_args.args[0]
+        self.assertIn("foo/epoch_0_step_0", log_message)
+        self.assertIn("purge failed", log_message)
+
+    def test_remove_worst_checkpoint_background_scheduling_exception(self) -> None:
+        file_system = MagicMock()
+        file_system.rm_in_background.side_effect = Exception("executor unavailable")
+        ckpt_manager = CheckpointManager("foo", file_system=file_system)
+        checkpoint = CheckpointPath("foo", 0, 0)
+        ckpt_manager._ckpt_paths = [checkpoint]
+
+        with patch("torchtnt.utils.checkpoint.logging.Logger.error") as log_mock:
+            ckpt_manager.remove_checkpoint()
+
+        log_mock.assert_called_once()
+        log_message = log_mock.call_args.args[0]
+        self.assertIn("foo/epoch_0_step_0", log_message)
+        self.assertIn("executor unavailable", log_message)
 
     @patch(
         "fsspec.implementations.local.LocalFileSystem.rm",
