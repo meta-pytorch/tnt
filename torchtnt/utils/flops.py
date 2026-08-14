@@ -102,7 +102,7 @@ def _conv_flop_count(
 
 
 def _conv_flop_jit(
-    inputs: List[Union[torch.Tensor, bool, Tuple[bool]]],
+    inputs: Tuple[InputType, ...],
     outputs: Tuple[torch.Tensor],
 ) -> Number:
     """
