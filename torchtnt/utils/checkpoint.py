@@ -10,11 +10,23 @@ import logging
 import math
 import os
 import re
+from concurrent.futures import Future
 from dataclasses import dataclass
 from enum import Enum
 from functools import total_ordering
 from operator import xor
-from typing import Any, Dict, List, Literal, Optional, Pattern, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Pattern,
+    Tuple,
+    Union,
+)
 
 import fsspec
 import torch
@@ -27,6 +39,19 @@ from torch.nn.modules.module import _IncompatibleKeys
 from torchtnt.utils.distributed import PGWrapper, rank_zero_read_and_broadcast
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+def _handle_checkpoint_removal_completion(
+    checkpoint_path: "CheckpointPath",
+    future: Future[None],
+) -> None:
+    try:
+        future.result()
+    except Exception as exc:
+        logger.error(
+            f"Failed to remove checkpoint '{checkpoint_path}' for bookkeeping purposes. "
+            f"Do not use it to restore since it may be corrupted! Exception: {exc}"
+        )
 
 
 @dataclass
@@ -609,15 +634,33 @@ class CheckpointManager:
         """
         worst_ckpt_path = self._ckpt_paths.pop(0)
         if self._pg_wrapper.get_rank() == 0:
-            try:
-                self._file_system.rm(worst_ckpt_path.path, recursive=True)
-            except Exception as exc:
-                logger.error(
-                    (
+            rm_in_background = getattr(self._file_system, "rm_in_background", None)
+            if callable(rm_in_background):
+                try:
+                    future = cast(Callable[..., Future[None]], rm_in_background)(
+                        worst_ckpt_path.path,
+                        recursive=True,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        f"Failed to schedule checkpoint '{worst_ckpt_path}' for background removal. "
+                        f"No removal was attempted. Exception: {exc}"
+                    )
+                else:
+                    future.add_done_callback(
+                        lambda completed_future: _handle_checkpoint_removal_completion(
+                            worst_ckpt_path,
+                            completed_future,
+                        )
+                    )
+            else:
+                try:
+                    self._file_system.rm(worst_ckpt_path.path, recursive=True)
+                except Exception as exc:
+                    logger.error(
                         f"Failed to remove checkpoint '{worst_ckpt_path}' for bookkeeping purposes. "
                         f"Do not use it to restore since it may be corrupted! Exception: {exc}"
                     )
-                )
 
 
 @rank_zero_read_and_broadcast
