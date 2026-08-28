@@ -9,7 +9,7 @@
 import torch
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.state import EntryPoint, State
-from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTrainUnit
+from torchtnt.framework.unit import TEvalUnit, TPredictUnit, TTestUnit, TTrainUnit
 
 
 class PyTorchProfiler(Callback):
@@ -42,7 +42,10 @@ class PyTorchProfiler(Callback):
             self.profiler.start()
 
     def on_eval_step_end(self, state: State, unit: TEvalUnit) -> None:
-        self.profiler.step()
+        # if in fit do nothing: the profiler schedule is driven by train steps,
+        # and stepping here would advance it past the intended train step
+        if state.entry_point == EntryPoint.EVALUATE:
+            self.profiler.step()
 
     def on_eval_end(self, state: State, unit: TEvalUnit) -> None:
         # if in fit do nothing since the profiler will be stopped in on_train_end
@@ -57,3 +60,17 @@ class PyTorchProfiler(Callback):
 
     def on_predict_end(self, state: State, unit: TPredictUnit) -> None:
         self.profiler.stop()
+
+    def on_test_start(self, state: State, unit: TTestUnit) -> None:
+        # if in fit do nothing: the test phase runs after training completes, so
+        # the profiler has already been stopped in on_train_end
+        if state.entry_point == EntryPoint.TEST:
+            self.profiler.start()
+
+    def on_test_step_end(self, state: State, unit: TTestUnit) -> None:
+        if state.entry_point == EntryPoint.TEST:
+            self.profiler.step()
+
+    def on_test_end(self, state: State, unit: TTestUnit) -> None:
+        if state.entry_point == EntryPoint.TEST:
+            self.profiler.stop()
