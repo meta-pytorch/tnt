@@ -78,6 +78,7 @@ def predict(
         increment epoch counter
         call on_predict_epoch_end on unit first and then callbacks
         call on_predict_end on unit first and then callbacks
+        call shutdown on unit
     """
     _log_api_usage("predict")
     callbacks = callbacks or []
@@ -111,6 +112,8 @@ def predict(
         predict_unit.on_exception(state, e)
         callback_handler.on_exception(state, predict_unit, e)
         raise e
+
+    predict_unit.shutdown()
 
 
 def _predict_impl(

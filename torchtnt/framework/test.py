@@ -77,6 +77,7 @@ def test(
         increment epoch counter
         call on_test_epoch_end on unit first and then callbacks
         call on_test_end on unit first and then callbacks
+        call shutdown on unit
     """
     _log_api_usage("test")
     callback_handler = CallbackHandler(callbacks or [])
@@ -91,6 +92,7 @@ def test(
     try:
         with torch.no_grad():
             _test_impl(state, test_unit, callback_handler)
+
         logger.info("Finished test")
         if state.timer:
             logger.info(get_timer_summary(state.timer))
@@ -102,6 +104,8 @@ def test(
         test_unit.on_exception(state, e)
         callback_handler.on_exception(state, test_unit, e)
         raise e
+
+    test_unit.shutdown()
 
 
 def _test_impl(

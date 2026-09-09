@@ -101,6 +101,7 @@ def fit(
             if should evaluate after this epoch:
                 run eval loop
         call on_train_end on unit first and then callbacks
+        call shutdown on unit
     """
     _log_api_usage("fit")
 
@@ -169,3 +170,5 @@ def fit(
         unit.on_exception(state, e)
         callback_handler.on_exception(state, unit, e)
         raise e
+
+    unit.shutdown()

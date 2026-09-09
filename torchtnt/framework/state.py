@@ -57,7 +57,7 @@ class ActivePhase(Enum):
         - ``EntryPoint.PREDICT`` - ``ActivePhase.PREDICT``
         - ``EntryPoint.TEST`` - ``ActivePhase.TEST``
 
-    This can be used within hooks such as :meth:`~torchtnt.framework.unit._OnExceptionMixin.on_exception`
+    This can be used within hooks such as :meth:`~torchtnt.framework.unit._UnitLifecycleMixin.on_exception`
     to determine within which of training, evaluation, prediction, or testing the hook is being called.
     """
 

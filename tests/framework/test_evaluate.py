@@ -22,6 +22,31 @@ from torchtnt.utils.timer import Timer
 
 
 class EvaluateTest(unittest.TestCase):
+    def test_shutdown_runs_after_callbacks(self) -> None:
+        events: list[str] = []
+
+        class ShutdownUnit(DummyEvalUnit):
+            def on_eval_end(self, state: State) -> None:
+                events.append("unit_on_eval_end")
+
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+
+        class ShutdownCallback(Callback):
+            def on_eval_end(self, state: State, unit: TEvalUnit) -> None:
+                events.append("callback_on_eval_end")
+
+        evaluate(
+            ShutdownUnit(input_dim=2),
+            generate_random_dataloader(num_samples=2, input_dim=2, batch_size=2),
+            callbacks=[ShutdownCallback()],
+        )
+
+        self.assertEqual(
+            ["unit_on_eval_end", "callback_on_eval_end", "unit_shutdown"],
+            events,
+        )
+
     def test_evaluate(self) -> None:
         """
         Test evaluate entry point

@@ -289,8 +289,17 @@ class AppStateMixin:
         return tracked_optimizers
 
 
-class _OnExceptionMixin:
+class _UnitLifecycleMixin:
     def on_exception(self, state: State, exc: BaseException) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        """Release resources after a successful entry point invocation.
+
+        Entry points call this once after all terminal callback hooks when the
+        loop completes. This hook ends the unit lifecycle; callers must not reuse
+        the unit or invoke ``shutdown`` again afterward.
+        """
         pass
 
 
@@ -300,7 +309,7 @@ TPredictData = TypeVar("TPredictData")
 TTestData = TypeVar("TTestData")
 
 
-class TrainUnit(AppStateMixin, _OnExceptionMixin, Generic[TTrainData], ABC):
+class TrainUnit(AppStateMixin, _UnitLifecycleMixin, Generic[TTrainData], ABC):
     """
     The TrainUnit is an interface that can be used to organize your training logic. The core of it is the ``train_step`` which
     is an abstract method where you can define the code you want to run each iteration of the dataloader.
@@ -429,7 +438,7 @@ class TrainUnit(AppStateMixin, _OnExceptionMixin, Generic[TTrainData], ABC):
         return cast(TTrainData, next(data_iter))
 
 
-class EvalUnit(AppStateMixin, _OnExceptionMixin, Generic[TEvalData], ABC):
+class EvalUnit(AppStateMixin, _UnitLifecycleMixin, Generic[TEvalData], ABC):
     """
     The EvalUnit is an interface that can be used to organize your evaluation logic. The core of it is the ``eval_step`` which
     is an abstract method where you can define the code you want to run each iteration of the dataloader.
@@ -548,7 +557,7 @@ class EvalUnit(AppStateMixin, _OnExceptionMixin, Generic[TEvalData], ABC):
 
 class PredictUnit(
     AppStateMixin,
-    _OnExceptionMixin,
+    _UnitLifecycleMixin,
     Generic[TPredictData],
     ABC,
 ):
@@ -669,7 +678,7 @@ class PredictUnit(
 
 class TestUnit(
     AppStateMixin,
-    _OnExceptionMixin,
+    _UnitLifecycleMixin,
     Generic[TTestData],
     ABC,
 ):

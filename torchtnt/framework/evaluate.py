@@ -77,6 +77,7 @@ def evaluate(
         increment epoch counter
         call on_eval_epoch_end on unit first and then callbacks
         call on_eval_end on unit first and then callbacks
+        call shutdown on unit
     """
     _log_api_usage("evaluate")
     callback_handler = CallbackHandler(callbacks or [])
@@ -90,6 +91,7 @@ def evaluate(
     )
     try:
         _evaluate_impl(state, eval_unit, callback_handler)
+
         logger.info("Finished evaluation")
         if state.timer:
             logger.info(get_timer_summary(state.timer))
@@ -101,6 +103,8 @@ def evaluate(
         eval_unit.on_exception(state, e)
         callback_handler.on_exception(state, eval_unit, e)
         raise e
+
+    eval_unit.shutdown()
 
 
 @torch.no_grad()

@@ -123,6 +123,62 @@ class PredictTest(unittest.TestCase):
         self.assertEqual(callback_mock.on_predict_epoch_end.call_count, 1)
         self.assertEqual(callback_mock.on_predict_end.call_count, 1)
 
+    def test_shutdown_error_does_not_run_exception_hooks(self) -> None:
+        events: list[str] = []
+
+        class ShutdownErrorUnit(DummyPredictUnit):
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+                raise RuntimeError("shutdown failed")
+
+            def on_exception(self, state: State, exc: BaseException) -> None:
+                events.append("unit_on_exception")
+
+        class ShutdownErrorCallback(Callback):
+            def on_exception(
+                self, state: State, unit: object, exc: BaseException
+            ) -> None:
+                events.append("callback_on_exception")
+
+        with self.assertRaisesRegex(RuntimeError, "shutdown failed"):
+            predict(
+                ShutdownErrorUnit(input_dim=2),
+                generate_random_dataloader(2, 2, 1),
+                callbacks=[ShutdownErrorCallback()],
+                timer=Timer(),
+            )
+
+        self.assertEqual(events, ["unit_shutdown"])
+
+    def test_shutdown_runs_after_callbacks(self) -> None:
+        events: list[str] = []
+
+        class PredictEndOrderUnit(DummyPredictUnit):
+            def on_predict_end(self, state: State) -> None:
+                events.append("unit_on_predict_end")
+
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+
+        class PredictEndOrderCallback(Callback):
+            def on_predict_end(self, state: State, unit: TPredictUnit) -> None:
+                events.append("callback_on_predict_end")
+
+        predict(
+            PredictEndOrderUnit(input_dim=2),
+            generate_random_dataloader(num_samples=2, input_dim=2, batch_size=2),
+            callbacks=[PredictEndOrderCallback()],
+        )
+
+        self.assertEqual(
+            [
+                "unit_on_predict_end",
+                "callback_on_predict_end",
+                "unit_shutdown",
+            ],
+            events,
+        )
+
     def test_predict_uses_iteration_timer(self) -> None:
         """
         Test predict records time in the iteration_timer

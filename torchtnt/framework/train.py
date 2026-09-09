@@ -87,6 +87,7 @@ def train(
             increment epoch counter
             call on_train_epoch_end on unit first and then callbacks
         call on_train_end on unit first and then callbacks
+        call shutdown on unit
     """
     _log_api_usage("train")
     callback_handler = CallbackHandler(callbacks or [])
@@ -102,6 +103,7 @@ def train(
     )
     try:
         _train_impl(state, train_unit, callback_handler)
+
         logger.info("Finished train")
         if state.timer:
             logger.info(get_timer_summary(state.timer))
@@ -113,6 +115,8 @@ def train(
         train_unit.on_exception(state, e)
         callback_handler.on_exception(state, train_unit, e)
         raise e
+
+    train_unit.shutdown()
 
 
 # Enabling grad in case this function is called directly from elsewhere in the framework.

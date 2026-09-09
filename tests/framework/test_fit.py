@@ -14,17 +14,113 @@ from unittest.mock import MagicMock, patch
 
 import torch
 from torch import nn
-from torchtnt.framework._test_utils import DummyFitUnit, generate_random_dataloader
+from torchtnt.framework._test_utils import (
+    DummyFitTestUnit,
+    DummyFitUnit,
+    generate_random_dataloader,
+)
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.fit import fit
 from torchtnt.framework.state import ActivePhase, State
-from torchtnt.framework.unit import EvalUnit, TrainUnit, TTrainUnit
+from torchtnt.framework.unit import (
+    EvalUnit,
+    TEvalUnit,
+    TrainUnit,
+    TTestUnit,
+    TTrainUnit,
+)
 from torchtnt.utils.timer import Timer
 from torchtnt.utils.version import is_torch_version_geq
 
 
 class FitTest(unittest.TestCase):
     TORCH_VERSION_GEQ_2_5_0: bool = is_torch_version_geq("2.5.0")
+
+    def test_shutdown_runs_once_after_callbacks(self) -> None:
+        events: list[str] = []
+
+        class ShutdownUnit(DummyFitUnit):
+            def on_eval_end(self, state: State) -> None:
+                events.append("unit_on_eval_end")
+
+            def on_train_end(self, state: State) -> None:
+                events.append("unit_on_train_end")
+
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+
+        class ShutdownCallback(Callback):
+            def on_eval_end(self, state: State, unit: TEvalUnit) -> None:
+                events.append("callback_on_eval_end")
+
+            def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+                events.append("callback_on_train_end")
+
+        fit(
+            ShutdownUnit(input_dim=2),
+            train_dataloader=generate_random_dataloader(
+                num_samples=2, input_dim=2, batch_size=2
+            ),
+            eval_dataloader=generate_random_dataloader(
+                num_samples=2, input_dim=2, batch_size=2
+            ),
+            max_epochs=1,
+            callbacks=[ShutdownCallback()],
+        )
+
+        self.assertEqual(
+            [
+                "unit_on_eval_end",
+                "callback_on_eval_end",
+                "unit_on_train_end",
+                "callback_on_train_end",
+                "unit_shutdown",
+            ],
+            events,
+        )
+
+    def test_shutdown_runs_after_optional_test_phase(self) -> None:
+        events: list[str] = []
+
+        class ShutdownUnit(DummyFitTestUnit):
+            def on_train_end(self, state: State) -> None:
+                events.append("unit_on_train_end")
+
+            def on_test_end(self, state: State) -> None:
+                events.append("unit_on_test_end")
+
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+
+        class ShutdownCallback(Callback):
+            def on_train_end(self, state: State, unit: TTrainUnit) -> None:
+                events.append("callback_on_train_end")
+
+            def on_test_end(self, state: State, unit: TTestUnit) -> None:
+                events.append("callback_on_test_end")
+
+        dataloader = generate_random_dataloader(
+            num_samples=2, input_dim=2, batch_size=2
+        )
+        fit(
+            ShutdownUnit(input_dim=2),
+            train_dataloader=dataloader,
+            eval_dataloader=dataloader,
+            test_dataloader=dataloader,
+            max_epochs=1,
+            callbacks=[ShutdownCallback()],
+        )
+
+        self.assertEqual(
+            [
+                "unit_on_train_end",
+                "callback_on_train_end",
+                "unit_on_test_end",
+                "callback_on_test_end",
+                "unit_shutdown",
+            ],
+            events,
+        )
 
     def test_fit_evaluate_every_n_epochs(self) -> None:
         """

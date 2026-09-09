@@ -22,11 +22,36 @@ from torchtnt.framework.callback import Callback
 from torchtnt.framework.fit import fit
 from torchtnt.framework.state import State
 from torchtnt.framework.test import test
-from torchtnt.framework.unit import TestUnit
+from torchtnt.framework.unit import TestUnit, TTestUnit
 from torchtnt.utils.timer import Timer
 
 
 class TestTest(unittest.TestCase):
+    def test_shutdown_runs_after_callbacks(self) -> None:
+        events: list[str] = []
+
+        class ShutdownUnit(DummyTestUnit):
+            def on_test_end(self, state: State) -> None:
+                events.append("unit_on_test_end")
+
+            def shutdown(self) -> None:
+                events.append("unit_shutdown")
+
+        class ShutdownCallback(Callback):
+            def on_test_end(self, state: State, unit: TTestUnit) -> None:
+                events.append("callback_on_test_end")
+
+        test(
+            ShutdownUnit(input_dim=2),
+            generate_random_dataloader(num_samples=2, input_dim=2, batch_size=2),
+            callbacks=[ShutdownCallback()],
+        )
+
+        self.assertEqual(
+            ["unit_on_test_end", "callback_on_test_end", "unit_shutdown"],
+            events,
+        )
+
     def test_test_basic(self) -> None:
         """
         Test the test() entry point runs all steps.
