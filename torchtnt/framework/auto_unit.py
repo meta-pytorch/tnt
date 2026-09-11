@@ -813,6 +813,17 @@ class AutoUnit(
 
         self._is_last_batch = False
 
+        # Clear prefetch state so the next epoch fetches from the new data
+        # iterator instead of reusing a stale batch (or stale None) left over
+        # from this epoch.  Without this reset, when the epoch exits via the
+        # max_steps_per_epoch cap *and* the dataloader happened to exhaust on
+        # the same step, _phase_to_next_batch holds None while
+        # _phase_to_prefetched is still True.  The next epoch's first
+        # _get_next_batch call then skips the init block, reads the stale None,
+        # and raises StopIteration immediately — producing a 0-step epoch.
+        self._phase_to_prefetched[ActivePhase.TRAIN] = False
+        self._phase_to_next_batch[ActivePhase.TRAIN] = None
+
     def eval_step(self, state: State, data: TData) -> Tuple[torch.Tensor, Any]:
         with self.maybe_autocast_precision:
             # users must override this

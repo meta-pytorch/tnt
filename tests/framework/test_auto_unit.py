@@ -768,6 +768,52 @@ class TestAutoUnit(unittest.TestCase):
         _ = auto_unit._get_next_batch(get_dummy_train_state(), iter(data))
         self.assertIsNone(auto_unit._phase_to_next_batch[ActivePhase.TRAIN])
 
+    def test_on_train_epoch_end_resets_prefetch_state(self) -> None:
+        """When an epoch exits via max_steps_per_epoch (not StopIteration),
+        the prefetch state must be cleared so the next epoch fetches from the
+        new data iterator.  Without the reset, _phase_to_prefetched stays True
+        and _phase_to_next_batch stays None, causing the next epoch's first
+        _get_next_batch to raise StopIteration immediately (0-step epoch)."""
+        auto_unit = DummyAutoUnit(module=torch.nn.Linear(2, 2))
+        state = get_dummy_train_state()
+        state._active_phase = ActivePhase.TRAIN
+
+        move_data_to_device_mock = patch.object(
+            auto_unit,
+            "move_data_to_device",
+            side_effect=lambda state, data, non_blocking: data,
+        )
+
+        # Simulate an epoch with 2 batches where max_steps_per_epoch = 2.
+        # The dataloader also has exactly 2 items, so the prefetch of batch 3
+        # catches StopIteration and caches None.
+        data_iter = iter([1, 2])
+        with move_data_to_device_mock:
+            batch = auto_unit._get_next_batch(state, data_iter)
+        self.assertEqual(batch, 1)
+        with move_data_to_device_mock:
+            batch = auto_unit._get_next_batch(state, data_iter)
+        self.assertEqual(batch, 2)
+
+        # At this point: prefetched=True, next_batch=None (stale StopIteration).
+        # The training loop would exit here via max_steps_per_epoch.
+        self.assertTrue(auto_unit._phase_to_prefetched[ActivePhase.TRAIN])
+        self.assertIsNone(auto_unit._phase_to_next_batch[ActivePhase.TRAIN])
+
+        # Simulate epoch end — this is where the fix lives.
+        auto_unit.on_train_epoch_end(state)
+
+        # After the fix, prefetch state should be cleared.
+        self.assertFalse(auto_unit._phase_to_prefetched[ActivePhase.TRAIN])
+        self.assertIsNone(auto_unit._phase_to_next_batch[ActivePhase.TRAIN])
+
+        # The next epoch's first _get_next_batch should use the new iterator,
+        # not the stale None.
+        new_data_iter = iter([10, 20])
+        with move_data_to_device_mock:
+            batch = auto_unit._get_next_batch(state, new_data_iter)
+        self.assertEqual(batch, 10)
+
     def test_detect_anomaly_disabled_with_torch_compile(self) -> None:
         auto_unit = DummyAutoUnit(
             module=torch.nn.Linear(2, 2),
