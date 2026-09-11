@@ -148,3 +148,22 @@ And to save only the top three performing models, you can use the existing `keep
             mode="min"
         )
     )
+
+When finetuning your models, you can pass RestoreOptions to avoid loading optimizers and learning rate schedulers like so:
+
+.. code-block:: python
+
+    tss = TorchSnapshotSaver(
+        dirpath=your_dirpath_here,
+        save_every_n_train_steps=100,
+        save_every_n_epochs=2,
+    )
+
+    # loads latest checkpoint, if it exists
+    if latest_checkpoint_dir:
+        tss.restore_from_latest(
+            your_dirpath_here,
+            your_unit,
+            train_dataloader=dataloader,
+            restore_options=RestoreOptions(restore_optimizers=False, restore_lr_schedulers=False)
+        )
