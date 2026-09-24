@@ -71,8 +71,12 @@ if __name__ == "__main__":
         keywords=["pytorch", "torch", "training", "tools", "utilities"],
         python_requires=">=3.7",
         install_requires=read_requirements("requirements.txt"),
+        include_package_data=True,
         packages=find_packages(),
         package_data={"torchtnt": ["py.typed"]},
+        data_files=[
+            ('requirement_files',['requirements.txt', 'dev-requirements.txt']),
+        ],
         zip_safe=True,
         classifiers=[
             "Development Status :: 2 - Pre-Alpha",
