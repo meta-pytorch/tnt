@@ -9,7 +9,7 @@
 
 import math
 import unittest
-from typing import Tuple
+from typing import Any, Tuple
 from unittest.mock import MagicMock, patch
 
 import torch
@@ -327,6 +327,112 @@ class FitTest(unittest.TestCase):
                 )
 
         self.assertTrue(my_unit.eval_progress.eval_pending)
+
+    def test_fit_restart_does_not_rerun_completed_eval(self) -> None:
+        input_dim = 2
+        batch_size = 2
+        train_dataloader = generate_random_dataloader(2, input_dim, batch_size)
+        eval_dataloader = generate_random_dataloader(2, input_dim, batch_size)
+        saved_progress: dict[str, dict[str, Any]] = {}
+        checkpoint_paths: list[str] = []
+
+        class SaveAndPreemptAfterEval(Callback):
+            def on_eval_epoch_end(self, state: State, unit: TEvalUnit) -> None:
+                saved_progress.update(
+                    {
+                        name: progress.state_dict().copy()
+                        for name, progress in unit.tracked_progress().items()
+                    }
+                )
+                train_progress = saved_progress["train_progress"]
+                checkpoint_paths.append(
+                    f"epoch_{train_progress['num_epochs_completed']}_step_{train_progress['num_steps_completed']}"
+                )
+                if len(checkpoint_paths) == 1:
+                    raise RuntimeError("simulated post-checkpoint preemption")
+
+        first_unit = DummyFitUnit(input_dim=input_dim)
+        callback = SaveAndPreemptAfterEval()
+        with self.assertRaisesRegex(
+            RuntimeError, "simulated post-checkpoint preemption"
+        ):
+            fit(
+                first_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=1,
+                callbacks=[callback],
+            )
+
+        self.assertFalse(saved_progress["eval_progress"]["eval_pending"])
+        self.assertEqual(checkpoint_paths, ["epoch_1_step_1"])
+
+        restored_unit = DummyFitUnit(input_dim=input_dim)
+        for name, progress in restored_unit.tracked_progress().items():
+            progress.load_state_dict(saved_progress[name])
+
+        with patch.object(
+            restored_unit, "eval_step", wraps=restored_unit.eval_step
+        ) as mock_eval_step:
+            fit(
+                restored_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=1,
+                callbacks=[callback],
+            )
+
+        self.assertEqual(mock_eval_step.call_count, 0)
+        self.assertEqual(checkpoint_paths, ["epoch_1_step_1"])
+        self.assertEqual(restored_unit.eval_progress.num_epochs_completed, 1)
+        self.assertFalse(restored_unit.eval_progress.eval_pending)
+
+    def test_fit_restart_reruns_mid_eval_preemption(self) -> None:
+        input_dim = 2
+        batch_size = 2
+        train_dataloader = generate_random_dataloader(2, input_dim, batch_size)
+        eval_dataloader = generate_random_dataloader(4, input_dim, batch_size)
+        saved_progress: dict[str, dict[str, Any]] = {}
+
+        class SaveAndPreemptMidEval(Callback):
+            def on_eval_step_end(self, state: State, unit: TEvalUnit) -> None:
+                saved_progress.update(
+                    {
+                        name: progress.state_dict().copy()
+                        for name, progress in unit.tracked_progress().items()
+                    }
+                )
+                raise RuntimeError("simulated mid-eval preemption")
+
+        first_unit = DummyFitUnit(input_dim=input_dim)
+        with self.assertRaisesRegex(RuntimeError, "simulated mid-eval preemption"):
+            fit(
+                first_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=1,
+                callbacks=[SaveAndPreemptMidEval()],
+            )
+
+        self.assertTrue(saved_progress["eval_progress"]["eval_pending"])
+
+        restored_unit = DummyFitUnit(input_dim=input_dim)
+        for name, progress in restored_unit.tracked_progress().items():
+            progress.load_state_dict(saved_progress[name])
+
+        with patch.object(
+            restored_unit, "eval_step", wraps=restored_unit.eval_step
+        ) as mock_eval_step:
+            fit(
+                restored_unit,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_epochs=1,
+            )
+
+        self.assertEqual(mock_eval_step.call_count, 2)
+        self.assertEqual(restored_unit.eval_progress.num_epochs_completed, 1)
+        self.assertFalse(restored_unit.eval_progress.eval_pending)
 
     def test_fit_stop(self) -> None:
         Batch = Tuple[torch.Tensor, torch.Tensor]
