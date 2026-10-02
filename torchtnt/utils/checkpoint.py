@@ -173,9 +173,13 @@ class CheckpointPath:
         Raises:
             ValueError: If the path is malformed (either non-parsable, or contains wrong data types)
         """
+        # Only the checkpoint name (the final path component) decides this. If we
+        # looked at the whole path, a dirpath that happens to contain
+        # "train_step"/"eval_step"/"predict_step" would flip a phase-naive
+        # checkpoint onto the phase-aware regex.
+        ckpt_name = checkpoint_path.rstrip("/").rsplit("/", 1)[-1]
         is_phase_aware = any(
-            phase in checkpoint_path
-            for phase in ["train_step", "eval_step", "predict_step"]
+            phase in ckpt_name for phase in ["train_step", "eval_step", "predict_step"]
         )
         regex = self.PHASE_AWARE_REGEX if is_phase_aware else self.PHASE_NAIVE_REGEX
         path_match = regex.match(checkpoint_path)
