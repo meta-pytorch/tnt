@@ -44,11 +44,17 @@ def _find_optimizers_for_module(
     Given a module, returns a list of optimizers that are associated with it.
     """
     optimizer_list = []
-    module_params = [param.data_ptr() for param in module.parameters()]
+    # Match by parameter identity across all param groups, not by data_ptr(). Under
+    # FSDP1 with use_orig_params=True, a param outside a rank's local shard is a
+    # shared size-0 tensor, so data_ptr() varies by rank and ranks can disagree on
+    # the match, diverging on the collectives in FSDP.optim_state_dict.
+    module_params = {id(param) for param in module.parameters()}
     for optim_name, optimizer in optimizers.items():
-        optimizer_params = [
-            param.data_ptr() for param in optimizer.param_groups[0]["params"]
-        ]
-        if all(module_param in optimizer_params for module_param in module_params):
+        optimizer_params = {
+            id(param)
+            for param_group in optimizer.param_groups
+            for param in param_group["params"]
+        }
+        if module_params <= optimizer_params:
             optimizer_list.append((optim_name, optimizer))
     return optimizer_list
