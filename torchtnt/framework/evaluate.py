@@ -208,6 +208,12 @@ def _evaluate_impl(
     # set progress counters for the next epoch
     eval_unit.eval_progress.increment_epoch()
 
+    # A fit-triggered eval is complete once its epoch progress has advanced. Clear
+    # the pending marker before epoch-end callbacks, since checkpoint callbacks
+    # serialize progress from this hook.
+    if state.entry_point == EntryPoint.FIT:
+        eval_unit.eval_progress.mark_eval_completed()
+
     eval_unit.on_eval_epoch_end(state)
     callback_handler.on_eval_epoch_end(state, eval_unit)
 

@@ -199,7 +199,6 @@ def _run_fit_eval(
         eval_unit,
         callback_handler,
     )
-    eval_unit.eval_progress.mark_eval_completed()
     state._active_phase = ActivePhase.TRAIN
 
 
