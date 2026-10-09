@@ -632,6 +632,7 @@ class TestAutoUnit(unittest.TestCase):
         )
 
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, first_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
@@ -643,6 +644,7 @@ class TestAutoUnit(unittest.TestCase):
         )
 
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, second_data_iter)
         # prefetched data is still from the previous data iter even though the new data iter is passed
         self.assertEqual(batch, 2)
@@ -655,12 +657,14 @@ class TestAutoUnit(unittest.TestCase):
         )
 
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, second_data_iter)
         self.assertEqual(batch, 3)
         self._assert_next_batch_dicts(auto_unit, train_prefetched=True)
         self.assertTrue(auto_unit._is_last_batch)
 
         with move_data_to_device_mock, self.assertRaises(StopIteration):
+            # pyrefly: ignore [bad-argument-type]
             auto_unit._get_next_batch(state, second_data_iter)
         self._assert_next_batch_dicts(auto_unit)
         self.assertFalse(auto_unit._is_last_batch)
@@ -681,6 +685,7 @@ class TestAutoUnit(unittest.TestCase):
         )
 
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, train_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
@@ -693,6 +698,7 @@ class TestAutoUnit(unittest.TestCase):
 
         state._active_phase = ActivePhase.EVALUATE
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, eval_data_iter)
         self.assertEqual(batch, 3)
         self._assert_next_batch_dicts(
@@ -707,6 +713,7 @@ class TestAutoUnit(unittest.TestCase):
 
         state._active_phase = ActivePhase.PREDICT
         with move_data_to_device_mock:
+            # pyrefly: ignore [bad-argument-type]
             batch = auto_unit._get_next_batch(state, predict_data_iter)
         self.assertEqual(batch, 5)
         self._assert_next_batch_dicts(

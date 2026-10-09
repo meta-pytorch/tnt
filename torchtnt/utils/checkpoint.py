@@ -438,6 +438,7 @@ class CheckpointManager:
         )
         if best_checkpoint_config:
             self._ckpt_paths.sort(
+                # pyrefly: ignore [missing-attribute]
                 key=lambda x: x.metric_data.value,
                 # sort descending if min, placing worst metric at top of list
                 reverse=(best_checkpoint_config.mode == "min"),
