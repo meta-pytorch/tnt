@@ -10,6 +10,7 @@
 from typing import Any, cast, Dict, Union
 
 from pyre_extensions import none_throws
+from torchtnt.framework._loop_utils import _is_epoch_done
 from torchtnt.framework.callbacks.checkpointer_types import RestoreOptions
 from torchtnt.framework.state import ActivePhase, EntryPoint, State
 from torchtnt.framework.unit import AppStateMixin, TEvalUnit, TPredictUnit, TTrainUnit
@@ -145,6 +146,21 @@ def _prepare_app_state_for_checkpoint(
         active_dataloaders[ActivePhase.TRAIN] = none_throws(
             state.train_state
         ).dataloader
+
+    # A train epoch that has run all of its steps is over before increment_epoch():
+    # on resume the loop closes it without reading a batch. Its dataloader state
+    # describes that finished epoch, so omit it as epoch-end checkpoints do. A
+    # loader that applies restored state lazily on its first batch would otherwise
+    # hand the exhausted epoch to the next one, which then ends with zero steps
+    # and still increments the epoch counter.
+    if ActivePhase.TRAIN in active_dataloaders:
+        train_state = none_throws(state.train_state)
+        if _is_epoch_done(
+            cast(TTrainUnit, unit).train_progress,
+            train_state.max_steps_per_epoch,
+            train_state.max_steps,
+        ):
+            del active_dataloaders[ActivePhase.TRAIN]
 
     for active_phase, dl in active_dataloaders.items():
         if isinstance(dl, Stateful):
