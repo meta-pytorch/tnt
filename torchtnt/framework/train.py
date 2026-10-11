@@ -147,18 +147,37 @@ def _train_impl(
 
     _maybe_run_pending_fit_eval(state, train_unit, callback_handler)
 
+    consecutive_empty_epochs = 0
     while not (
         state.should_stop
         or _is_done(
             train_unit.train_progress, train_state.max_epochs, train_state.max_steps
         )
     ):
+        steps_before_epoch = train_unit.train_progress.num_steps_completed
         _train_epoch_impl(state, train_unit, callback_handler)
         logger.info(
             "After train epoch, train progress: "
             f"num_epochs_completed = {train_unit.train_progress.num_epochs_completed}, "
             f"num_steps_completed = {train_unit.train_progress.num_steps_completed}"
         )
+        if train_unit.train_progress.num_steps_completed == steps_before_epoch:
+            consecutive_empty_epochs += 1
+        else:
+            consecutive_empty_epochs = 0
+        # A single empty epoch is expected when resuming from a checkpoint taken at the
+        # end of an epoch. Without max_epochs, repeated empty epochs never terminate.
+        if (
+            train_state.max_epochs is None
+            and consecutive_empty_epochs >= 2
+            and not state.should_stop
+        ):
+            raise RuntimeError(
+                "Train dataloader yielded no batches for "
+                f"{consecutive_empty_epochs} consecutive epochs and max_epochs is not "
+                "set, so training would never terminate. Check that the dataloader is "
+                "not empty and can be iterated more than once."
+            )
 
     train_unit.on_train_end(state)
     callback_handler.on_train_end(state, train_unit)

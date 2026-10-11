@@ -272,6 +272,46 @@ class TrainTest(unittest.TestCase):
             max_epochs * expected_steps_per_epoch,
         )
 
+    def test_train_empty_dataloader_max_steps_raises(self) -> None:
+        my_unit = DummyTrainUnit(input_dim=2)
+
+        with self.assertRaisesRegex(RuntimeError, "would never terminate"):
+            train(my_unit, [], max_epochs=None, max_steps=10)
+        self.assertEqual(my_unit.train_progress.num_steps_completed, 0)
+
+    def test_train_exhausted_iterator_max_steps_raises(self) -> None:
+        my_unit = DummyTrainUnit(input_dim=2)
+        dataloader = generate_random_dataloader(
+            num_samples=4, input_dim=2, batch_size=2
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "would never terminate"):
+            train(my_unit, iter(dataloader), max_epochs=None, max_steps=10)
+        self.assertEqual(my_unit.train_progress.num_steps_completed, 2)
+
+    def test_train_single_empty_epoch_continues(self) -> None:
+        dataloader = generate_random_dataloader(
+            num_samples=4, input_dim=2, batch_size=2
+        )
+
+        class EmptyFirstEpoch:
+            def __init__(self) -> None:
+                self.num_iters = 0
+
+            def __iter__(self) -> Iterator[Any]:
+                self.num_iters += 1
+                return iter([]) if self.num_iters == 1 else iter(dataloader)
+
+        my_unit = DummyTrainUnit(input_dim=2)
+        train(my_unit, EmptyFirstEpoch(), max_epochs=None, max_steps=3)
+        self.assertEqual(my_unit.train_progress.num_steps_completed, 3)
+
+    def test_train_empty_dataloader_max_epochs_terminates(self) -> None:
+        my_unit = DummyTrainUnit(input_dim=2)
+        train(my_unit, [], max_epochs=3, max_steps=10)
+        self.assertEqual(my_unit.train_progress.num_epochs_completed, 3)
+        self.assertEqual(my_unit.train_progress.num_steps_completed, 0)
+
     def test_train_timing(self) -> None:
         """
         Test timing in train
