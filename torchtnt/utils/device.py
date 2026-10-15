@@ -84,7 +84,7 @@ def copy_data_to_device(
             # pyrefly: ignore [missing-attribute]
             data.default_factory,
             {
-                k: copy_data_to_device(v, device, *args, **kwargs)
+                k: copy_data_to_device(v, device, stream_to_record, *args, **kwargs)
                 # pyrefly: ignore [missing-attribute]
                 for k, v in data.items()
             },
@@ -97,28 +97,38 @@ def copy_data_to_device(
         # pyre-ignore: Too many arguments [19]: Call `object.__init__` expects 0 positional arguments, 1
         return data_type(
             {
-                k: copy_data_to_device(v, device, *args, **kwargs)
+                k: copy_data_to_device(v, device, stream_to_record, *args, **kwargs)
                 # pyre-ignore: Undefined attribute [16]: `Variable[T]` has no attribute `items`.
                 for k, v in data.items()
             }
         )
     elif issubclass(data_type, list):
-        # pyrefly: ignore [bad-return, not-iterable]
-        return data_type(copy_data_to_device(e, device, *args, **kwargs) for e in data)
+        # pyrefly: ignore [bad-return]
+        return data_type(
+            copy_data_to_device(e, device, stream_to_record, *args, **kwargs)
+            # pyrefly: ignore [not-iterable]
+            for e in data
+        )
     elif issubclass(data_type, tuple):
         if hasattr(data, "_asdict") and hasattr(data, "_fields"):
             # pyrefly: ignore [bad-return]
             return data_type(
-                **copy_data_to_device(data._asdict(), device, *args, **kwargs)
+                **copy_data_to_device(
+                    data._asdict(), device, stream_to_record, *args, **kwargs
+                )
             )
-        # pyrefly: ignore [bad-return, not-iterable]
-        return data_type(copy_data_to_device(e, device, *args, **kwargs) for e in data)
+        # pyrefly: ignore [bad-return]
+        return data_type(
+            copy_data_to_device(e, device, stream_to_record, *args, **kwargs)
+            # pyrefly: ignore [not-iterable]
+            for e in data
+        )
     # checking for __dataclass_fields__ is official way to check if data is a dataclass
     elif hasattr(data, "__dataclass_fields__"):
         new_data_class = data_type(
             **{
                 field.name: copy_data_to_device(
-                    getattr(data, field.name), device, *args, **kwargs
+                    getattr(data, field.name), device, stream_to_record, *args, **kwargs
                 )
                 # pyrefly: ignore [bad-argument-type]
                 for field in fields(data)
@@ -132,7 +142,11 @@ def copy_data_to_device(
                     new_data_class,
                     field.name,
                     copy_data_to_device(
-                        getattr(data, field.name), device, *args, **kwargs
+                        getattr(data, field.name),
+                        device,
+                        stream_to_record,
+                        *args,
+                        **kwargs,
                     ),
                 )
         return new_data_class

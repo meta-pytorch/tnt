@@ -7,7 +7,8 @@
 
 # pyre-strict
 import unittest
-from typing import Tuple
+from typing import Set, Tuple
+from unittest import mock
 
 import torch
 from torch.utils.data import Dataset, TensorDataset
@@ -51,3 +52,34 @@ class DataPrefetcherGPUTest(unittest.TestCase):
             self.assertEqual(targets.device, device)
 
         self.assertEqual(num_batches_in_data_prefetcher, num_samples / batch_size)
+
+    @skip_if_not_gpu
+    def test_cuda_data_prefetcher_records_consumer_stream(self) -> None:
+        device = torch.device("cuda:0")
+        batches = [
+            {"inputs": torch.randn(4, 2), "nested": [torch.randn(4)]} for _ in range(3)
+        ]
+        data_prefetcher = CudaDataPrefetcher(batches, device, num_prefetch_batches=2)
+        consumer_stream = torch.cuda.Stream()
+
+        recorded: Set[Tuple[int, torch.cuda.Stream]] = set()
+        original_record_stream = torch.Tensor.record_stream
+
+        def recording_record_stream(
+            tensor: torch.Tensor, stream: torch.cuda.Stream
+        ) -> None:
+            recorded.add((id(tensor), stream))
+            original_record_stream(tensor, stream)
+
+        with torch.cuda.stream(consumer_stream), mock.patch.object(
+            torch.Tensor, "record_stream", recording_record_stream
+        ):
+            consumed = list(data_prefetcher)
+
+        expected = {
+            (id(t), consumer_stream)
+            for batch in consumed
+            for t in (batch["inputs"], batch["nested"][0])
+        }
+        self.assertEqual(len(consumed), len(batches))
+        self.assertLessEqual(expected, recorded)
