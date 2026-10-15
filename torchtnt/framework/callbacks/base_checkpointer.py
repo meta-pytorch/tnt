@@ -225,13 +225,13 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
 
             # 1.1) append metric data only if best_checkpoint_config is defined
             metric_data: Optional[MetricData] = None
-            if self._best_checkpoint_config and (
-                metric_value := self._get_tracked_metric_value(cast(TTrainUnit, unit))
-            ):
-                metric_data = MetricData(
-                    name=none_throws(self._best_checkpoint_config).monitored_metric,
-                    value=metric_value,
-                )
+            if self._best_checkpoint_config:
+                metric_value = self._get_tracked_metric_value(cast(TTrainUnit, unit))
+                if metric_value is not None:
+                    metric_data = MetricData(
+                        name=none_throws(self._best_checkpoint_config).monitored_metric,
+                        value=metric_value,
+                    )
 
             checkpoint_path = self._checkpoint_manager.generate_checkpoint_path(
                 epoch,
