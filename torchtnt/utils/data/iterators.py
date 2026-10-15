@@ -161,11 +161,11 @@ class RoundRobinIterator(MultiIterator):
         self.individual_iterators: Mapping[
             str, Union[Iterator[DataLoader], Iterator[object]]
         ] = {name: iter(dl) for name, dl in individual_dataloaders.items()}
-        round_robin_order = iteration_strategy.iteration_order or list(
-            self.individual_iterators.keys()
+        self.round_robin_order: List[str] = list(
+            iteration_strategy.iteration_order or self.individual_iterators.keys()
         )
-        self.dataloader_cycle: Iterator[str] = cycle(round_robin_order)
-        self.cur_dataloader: str = round_robin_order[0]
+        self.dataloader_cycle: Iterator[str] = cycle(self.round_robin_order)
+        self.cur_dataloader: str = self.round_robin_order[0]
         self.finished_dataloaders: List[str] = []
 
     def __next__(self) -> Dict[str, Any]:
@@ -208,9 +208,9 @@ class RoundRobinIterator(MultiIterator):
         )
         self.finished_dataloaders = state_dict["finished_dataloaders"]
         cur_dataloader = state_dict["cur_dataloader"]
-        if cur_dataloader not in self.dataloader_cycle:
+        if cur_dataloader not in self.round_robin_order:
             logger.warning(
-                f"Did not find {cur_dataloader} in {list(self.dataloader_cycle)}. Skipping setting cur_dataloader"
+                f"Did not find {cur_dataloader} in {self.round_robin_order}. Skipping setting cur_dataloader"
             )
             return
         while self.cur_dataloader != cur_dataloader:

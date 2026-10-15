@@ -564,6 +564,26 @@ class TestMultiDataLoader(unittest.TestCase):
         self.assertEqual(round_robin_iter.cur_dataloader, "1")
         self.assertEqual(round_robin_iter.finished_dataloaders, [])
 
+    def test_round_robin_load_state_dict_unknown_cur_dataloader(self) -> None:
+        dataloader_1 = generate_random_dataloader(
+            num_samples=8, input_dim=1, batch_size=8
+        )
+        dataloader_2 = generate_random_dataloader(
+            num_samples=16, input_dim=1, batch_size=8
+        )
+        multi_dataloader = MultiDataLoader(
+            self._get_dataloaders_dict(dataloader_1, dataloader_2),
+            RoundRobin(),
+        )
+        multi_dataloader.load_state_dict(
+            {"iterator_state": {"finished_dataloaders": [], "cur_dataloader": "3"}}
+        )
+
+        round_robin_iter = cast(RoundRobinIterator, iter(multi_dataloader))
+        self.assertEqual(round_robin_iter.cur_dataloader, "1")
+        self.assertEqual(list(next(round_robin_iter).keys()), ["1"])
+        self.assertEqual(list(next(round_robin_iter).keys()), ["2"])
+
     def test_state_dict_with_non_stateful_iterator(self) -> None:
         dataloader_1 = generate_random_dataloader(
             num_samples=8, input_dim=1, batch_size=8
