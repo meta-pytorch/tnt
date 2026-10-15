@@ -985,6 +985,27 @@ class BaseCheckpointerTest(unittest.TestCase):
                     ),
                 )
 
+    def test_best_checkpoint_zero_metric_is_tracked(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bcs = BaseCheckpointSaver(
+                temp_dir,
+                save_every_n_epochs=1,
+                best_checkpoint_config=BestCheckpointConfig(
+                    monitored_metric="train_loss",
+                    mode="min",
+                ),
+            )
+
+            state = get_dummy_train_state()
+            my_train_unit = MyTrainLossUnit()
+            my_train_unit.train_loss = 0.0
+            bcs.on_train_epoch_end(state, my_train_unit)
+
+            self.assertEqual(
+                [str(x) for x in bcs._checkpoint_manager._ckpt_paths],
+                [os.path.join(temp_dir, "epoch_0_train_step_0_train_loss=0.0")],
+            )
+
     def test_best_checkpoint_top_k(self) -> None:
         # test top_k = 1
         with tempfile.TemporaryDirectory() as temp_dir:
