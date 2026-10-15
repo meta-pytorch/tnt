@@ -7,6 +7,7 @@
 
 # pyre-strict
 
+import time
 import unittest
 from typing import Any, Dict, Optional, Tuple
 
@@ -235,6 +236,23 @@ Name | Type   | # Parameters | # Trainable Parameters | Size (bytes) | Contains 
         self.assertEqual(ms_classifier.flops_backward, 0)
         self.assertEqual(ms_classifier.in_size, [1, 1, 224, 224])
         self.assertEqual(ms_classifier.out_size, [1, 1, 224, 224])
+
+    def test_forward_elapsed_time_is_in_milliseconds(self) -> None:
+        sleep_sec = 0.05
+
+        class SleepModule(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.linear = nn.Linear(1, 1)
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                time.sleep(sleep_sec)
+                return self.linear(x)
+
+        summary = get_module_summary(SleepModule(), module_args=(torch.ones(1),))
+        self.assertGreaterEqual(
+            float(summary.forward_elapsed_time_ms), sleep_sec * 1000.0
+        )
 
     def test_forward_elapsed_time(self) -> None:
         pretrained_model = nn.Sequential(
