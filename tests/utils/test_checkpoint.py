@@ -629,6 +629,50 @@ class CheckpointManagerTest(unittest.TestCase):
             ],
         )
 
+    def test_append_checkpoint_defers_removal_until_pending_save_succeeds(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_path = CheckpointPath(temp_dir, epoch=0, step=1)
+            os.mkdir(old_path.path)
+            ckpt_manager = CheckpointManager(temp_dir, keep_last_n_checkpoints=1)
+            self.assertEqual(ckpt_manager._ckpt_paths, [old_path])
+
+            pending_save: Future[None] = Future()
+            new_path = CheckpointPath(temp_dir, epoch=0, step=2)
+            ckpt_manager.append_checkpoint(new_path, pending_save=pending_save)
+
+            self.assertEqual(ckpt_manager._ckpt_paths, [new_path])
+            self.assertTrue(os.path.exists(old_path.path))
+
+            pending_save.set_result(None)
+            self.assertFalse(os.path.exists(old_path.path))
+
+    def test_append_checkpoint_keeps_old_checkpoint_if_pending_save_fails(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_path = CheckpointPath(temp_dir, epoch=0, step=1)
+            os.mkdir(old_path.path)
+            ckpt_manager = CheckpointManager(temp_dir, keep_last_n_checkpoints=1)
+
+            pending_save: Future[None] = Future()
+            ckpt_manager.append_checkpoint(
+                CheckpointPath(temp_dir, epoch=0, step=2), pending_save=pending_save
+            )
+            pending_save.set_exception(RuntimeError("save failed"))
+
+            self.assertTrue(os.path.exists(old_path.path))
+
+            # the kept checkpoint is removed once a later save succeeds
+            next_save: Future[None] = Future()
+            ckpt_manager.append_checkpoint(
+                CheckpointPath(temp_dir, epoch=0, step=3), pending_save=next_save
+            )
+            self.assertTrue(os.path.exists(old_path.path))
+            next_save.set_result(None)
+            self.assertFalse(os.path.exists(old_path.path))
+
     def test_prune_surplus_checkpoints(self) -> None:
         # with checkpoints to delete
         with tempfile.TemporaryDirectory() as temp_dir:

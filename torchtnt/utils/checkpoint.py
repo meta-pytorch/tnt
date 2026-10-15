@@ -552,7 +552,9 @@ class CheckpointManager:
             return None
         return self._ckpt_paths[-1]
 
-    def append_checkpoint(self, ckpt: CheckpointPath) -> None:
+    def append_checkpoint(
+        self, ckpt: CheckpointPath, pending_save: Optional[Future[Any]] = None
+    ) -> None:
         """
         This will update the internal state to keep track of the checkpoint. This function should only be called
         when a checkpoint whose path was returned from `generate_checkpoint_path` was successfully created.
@@ -560,12 +562,17 @@ class CheckpointManager:
 
         Args:
             ckpt: The checkpoint to save.
-            state: The training state.
+            pending_save: Future of a save of ``ckpt`` that may still be in flight. If given, a checkpoint
+                evicted to make room for ``ckpt`` is only deleted from the file system once this future
+                completes successfully.
         """
         # Remove oldest/worst checkpoint if needed
         max_ckpts = self._keep_last_n_checkpoints
         if max_ckpts and len(self._ckpt_paths) >= max_ckpts:
-            self.remove_checkpoint()
+            if pending_save is None:
+                self.remove_checkpoint()
+            else:
+                self._remove_worst_checkpoint(pending_save)
 
         # If we are monitoring a metric, but the checkpoint has no metric data, we don't track it
         if self._best_checkpoint_config and ckpt.metric_data:
@@ -622,12 +629,44 @@ class CheckpointManager:
         - If there is a `best_checkpoint_config`, then the checkpoint with the least optimal metric value
         - If there is no `best_checkpoint_config`, then the oldest checkpoint
         """
+        self._remove_worst_checkpoint(pending_save=None)
+
+    def _remove_worst_checkpoint(self, pending_save: Optional[Future[Any]]) -> None:
+        """
+        Same as ``remove_checkpoint``, but if ``pending_save`` is given the file system deletion is deferred until
+        it completes, and skipped if it fails, so the checkpoint being replaced is never removed before its
+        replacement is durable.
+        """
         worst_ckpt_path = self._ckpt_paths.pop(0)
         if self._pg_wrapper.get_rank() == 0:
+            paths_to_remove = [worst_ckpt_path]
             failed_checkpoint_path = self._take_failed_checkpoint_removal()
             if failed_checkpoint_path is not None:
-                self._remove_checkpoint_from_filesystem(failed_checkpoint_path)
-            self._remove_checkpoint_from_filesystem(worst_ckpt_path)
+                paths_to_remove.insert(0, failed_checkpoint_path)
+            if pending_save is None:
+                for path in paths_to_remove:
+                    self._remove_checkpoint_from_filesystem(path)
+            else:
+                # runs immediately if the save has already completed
+                pending_save.add_done_callback(
+                    lambda save: self._remove_checkpoints_after_save(
+                        paths_to_remove, save
+                    )
+                )
+
+    def _remove_checkpoints_after_save(
+        self, checkpoint_paths: List[CheckpointPath], save: Future[Any]
+    ) -> None:
+        if save.cancelled() or save.exception() is not None:
+            for checkpoint_path in checkpoint_paths:
+                logger.error(
+                    f"Deferring removal of checkpoint '{checkpoint_path}' because the in-flight checkpoint save "
+                    "did not complete successfully. Will retry after a later save succeeds."
+                )
+                self._queue_failed_checkpoint_removal(checkpoint_path)
+            return
+        for checkpoint_path in checkpoint_paths:
+            self._remove_checkpoint_from_filesystem(checkpoint_path)
 
     def _remove_checkpoint_from_filesystem(
         self, checkpoint_path: CheckpointPath
