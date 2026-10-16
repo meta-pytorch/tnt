@@ -105,6 +105,51 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
             self.assertNotEqual(restored_num_steps_completed, end_num_steps_completed)
             self.assertEqual(restored_num_steps_completed, save_every_n_train_steps)
 
+    def test_resume_from_step_checkpoint_on_last_step_of_epoch(self) -> None:
+        """End to end: a step-end checkpoint saved on an epoch's last step resumes on grid.
+
+        The loader applies restored state lazily on its first batch, like
+        ``torchdata.stateful_dataloader.StatefulDataLoader``. If the checkpoint carried
+        the loader state of the finished epoch, the next epoch would start exhausted,
+        complete with zero steps, and push the epoch counter one ahead.
+        """
+        max_steps_per_epoch = 2
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dcp_cb = DistributedCheckpointSaver(
+                temp_dir,
+                save_every_n_train_steps=max_steps_per_epoch,
+                knob_options=KnobOptions(1),
+            )
+            train(
+                DummyTrainUnit(input_dim=2),
+                LazyResumeDataLoader(num_batches=max_steps_per_epoch),
+                max_steps=max_steps_per_epoch,
+                max_steps_per_epoch=max_steps_per_epoch,
+                callbacks=[dcp_cb],
+            )
+
+            my_unit = DummyTrainUnit(input_dim=2)
+            dataloader = LazyResumeDataLoader(num_batches=max_steps_per_epoch)
+            dcp_cb.restore(
+                os.path.join(temp_dir, f"epoch_0_train_step_{max_steps_per_epoch}"),
+                my_unit,
+                train_dataloader=dataloader,
+            )
+            self.assertEqual(my_unit.train_progress.num_steps_completed, 2)
+            self.assertEqual(my_unit.train_progress.num_epochs_completed, 0)
+
+            train(
+                my_unit,
+                dataloader,
+                max_steps=6,
+                max_steps_per_epoch=max_steps_per_epoch,
+            )
+
+        self.assertEqual(my_unit.train_progress.num_steps_completed, 6)
+        self.assertEqual(my_unit.train_progress.num_epochs_completed, 3)
+        self.assertEqual(dataloader.batches_per_epoch, [2, 2])
+
     def test_save_restore_dataloader_state(self) -> None:
         input_dim = 2
         dataset_len = 10
@@ -1026,6 +1071,35 @@ class PerRankAwareStorageReader:
 
     def read_metadata(self, **kwargs: Any) -> Metadata:
         raise NotImplementedError
+
+
+class LazyResumeDataLoader:
+    """Stateful loader whose restored position takes effect on the first batch."""
+
+    def __init__(self, num_batches: int) -> None:
+        self.num_batches = num_batches
+        self.position = 0
+        self.batches_per_epoch: List[int] = []
+        self._pending_position: Optional[int] = None
+
+    def state_dict(self) -> Dict[str, Any]:
+        return {"position": self.position}
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        self._pending_position = state_dict["position"]
+
+    def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+        self.position = 0
+        self.batches_per_epoch.append(0)
+        while True:
+            if self._pending_position is not None:
+                self.position = self._pending_position
+                self._pending_position = None
+            if self.position >= self.num_batches:
+                return
+            self.position += 1
+            self.batches_per_epoch[-1] += 1
+            yield torch.rand(1, 2), torch.zeros(1, dtype=torch.long)
 
 
 class DummyStatefulDataLoader:

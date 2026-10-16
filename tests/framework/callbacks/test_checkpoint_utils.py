@@ -90,6 +90,8 @@ class CheckpointUtilsTest(unittest.TestCase):
 
         state = get_dummy_fit_state()
         state._active_phase = ActivePhase.EVALUATE
+        none_throws(state.train_state)._max_steps = 2
+        none_throws(state.train_state)._max_steps_per_epoch = 2
 
         train_dl = generate_dummy_stateful_dataloader(1, 1, 1)
         eval_dl = generate_dummy_stateful_dataloader(1, 1, 1)
@@ -109,6 +111,29 @@ class CheckpointUtilsTest(unittest.TestCase):
                 "eval_dataloader",
             ],
         )
+
+    def test_get_app_state_omits_train_dataloader_of_a_finished_epoch(self) -> None:
+        """A step-end checkpoint on an epoch's last step must not carry its loader.
+
+        On resume the loop closes that epoch without reading a batch, so a restored
+        loader position would leak into the next epoch.
+        """
+        my_unit = DummyTrainUnit(input_dim=2)
+        state = get_dummy_train_state()
+        state._active_phase = ActivePhase.TRAIN
+        train_state = none_throws(state.train_state)
+        train_state._dataloader = generate_dummy_stateful_dataloader(1, 1, 1)
+        train_state._max_steps = 4
+        train_state._max_steps_per_epoch = 2
+
+        my_unit.train_progress.increment_step()
+        mid_epoch = _prepare_app_state_for_checkpoint(state, my_unit, intra_epoch=True)
+        self.assertIn("train_dataloader", mid_epoch)
+
+        my_unit.train_progress.increment_step()
+        epoch_done = _prepare_app_state_for_checkpoint(state, my_unit, intra_epoch=True)
+        self.assertNotIn("train_dataloader", epoch_done)
+        self.assertIn("train_progress", epoch_done)
 
     def test_get_step_phase_mapping(self) -> None:
         unit = DummyAutoUnit(module=nn.Linear(2, 2))
