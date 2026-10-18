@@ -72,7 +72,10 @@ class CSVLogger(FileLogger, MetricLogger):
 
 
 def _write_csv(path: str, data_list: List[Dict[str, float]]) -> None:
+    # steps can log different metrics (e.g. eval metrics only on some steps), so the
+    # header is the ordered union of all keys and missing values are left empty
+    fieldnames = list(dict.fromkeys(k for row in data_list for k in row))
     with fs_open(path, "w") as f:
-        w = csv.DictWriter(f, data_list[0].keys())
+        w = csv.DictWriter(f, fieldnames)
         w.writeheader()
         w.writerows(data_list)

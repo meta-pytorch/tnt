@@ -45,3 +45,19 @@ class CSVLoggerTest(unittest.TestCase):
                 output = list(csv.DictReader(f))
                 self.assertEqual(float(output[0][log_name]), log_value)
                 self.assertEqual(int(output[0]["step"]), log_step)
+
+    def test_csv_log_different_metrics_per_step(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir, "test.csv").as_posix()
+            logger = CSVLogger(csv_path, steps_before_flushing=10)
+            logger.log("train_loss", 1.0, 1)
+            logger.log_dict({"train_loss": 0.5, "eval_acc": 0.9}, 2)
+            logger.close()
+
+            with open(csv_path) as f:
+                output = list(csv.DictReader(f))
+            self.assertEqual(len(output), 2)
+            self.assertEqual(float(output[0]["train_loss"]), 1.0)
+            self.assertEqual(output[0]["eval_acc"], "")
+            self.assertEqual(float(output[1]["train_loss"]), 0.5)
+            self.assertEqual(float(output[1]["eval_acc"]), 0.9)
