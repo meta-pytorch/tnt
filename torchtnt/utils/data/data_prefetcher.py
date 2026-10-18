@@ -9,7 +9,7 @@
 from typing import Iterable, Iterator, List, TypeVar
 
 import torch
-from torchtnt.utils.device import copy_data_to_device
+from torchtnt.utils.device import copy_data_to_device, record_data_in_stream
 
 Batch = TypeVar("Batch")
 
@@ -109,6 +109,10 @@ class CudaDataPrefetcher(Iterator[Batch]):
             # there are pre-fetched batches already from a previous `prefetching` call.
             # consume one
             batch = self._batches.pop(0)
+            # the batch was allocated on the prefetch stream; tell the caching
+            # allocator it is used on the consumer stream so its memory is not
+            # reused while consumer kernels may still read it
+            record_data_in_stream(batch, torch.cuda.current_stream())
             # refill the consumed batch
             try:
                 self._fetch_next_batch(self.data_iter)

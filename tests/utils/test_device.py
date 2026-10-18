@@ -8,17 +8,65 @@
 # pyre-strict
 
 import unittest
+from collections import defaultdict, namedtuple
+from dataclasses import dataclass, field
+from typing import Any, cast, List
 from unittest import mock
 
 import torch
 from torchtnt.utils.device import (
+    copy_data_to_device,
     get_device_from_env,
     get_nvidia_smi_gpu_stats,
     get_psutil_cpu_stats,
 )
 
 
+class _RecordingData:
+    """Tensor-like leaf that records the streams passed to ``record_stream``."""
+
+    def __init__(self) -> None:
+        self.recorded_streams: List[Any] = []
+
+    def to(self, *args: Any, **kwargs: Any) -> "_RecordingData":
+        return self
+
+    def record_stream(self, stream: Any) -> None:
+        self.recorded_streams.append(stream)
+
+
 class DeviceTest(unittest.TestCase):
+    def test_copy_data_to_device_records_stream_on_nested_data(self) -> None:
+        Pair = namedtuple("Pair", ["a", "b"])
+
+        @dataclass
+        class Batch:
+            x: Any
+            y: Any = field(init=False)
+
+        leaves = [_RecordingData() for _ in range(9)]
+        batch = Batch(x=leaves[7])
+        batch.y = leaves[8]
+        data = {
+            "list": [leaves[0], leaves[1]],
+            "tuple": (leaves[2],),
+            "namedtuple": Pair(a=leaves[3], b=leaves[4]),
+            "defaultdict": defaultdict(list, {"k": leaves[5]}),
+            "nested": {"leaf": leaves[6]},
+            "dataclass": batch,
+        }
+        stream = cast(torch.cuda.Stream, object())
+
+        copy_data_to_device(data, torch.device("cpu"), stream_to_record=stream)
+
+        for leaf in leaves:
+            self.assertEqual(leaf.recorded_streams, [stream])
+
+    def test_copy_data_to_device_no_stream_does_not_record(self) -> None:
+        leaf = _RecordingData()
+        copy_data_to_device({"a": [leaf]}, torch.device("cpu"))
+        self.assertEqual(leaf.recorded_streams, [])
+
     def test_get_cpu_device(self) -> None:
         device = get_device_from_env()
         self.assertEqual(device.type, "cpu")
