@@ -9,6 +9,7 @@
 import abc
 import logging
 import math
+from concurrent.futures import Future
 from datetime import timedelta
 from typing import Any, cast, Dict, Iterable, List, Literal, Optional, Union
 
@@ -280,7 +281,9 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
                 return False
 
             # 4) track checkpoint and clean up surplus if needed
-            self._checkpoint_manager.append_checkpoint(checkpoint_path)
+            self._checkpoint_manager.append_checkpoint(
+                checkpoint_path, pending_save=self._get_pending_save()
+            )
 
             # 5) invoke on_checkpoint_save callback on the unit since checkpoint was saved successfully
             unit.on_checkpoint_save(state, checkpoint_id=checkpoint_path.path)
@@ -444,6 +447,14 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
             Whether a new checkpoint was created.
         """
         ...
+
+    def _get_pending_save(self) -> Optional[Future[Any]]:
+        """
+        Returns the future of the checkpoint save started by the last ``_checkpoint_impl`` call if it may still
+        be in flight, or None if the save completed synchronously. Checkpoints evicted to honor
+        ``keep_last_n_checkpoints`` are only deleted once this future completes successfully.
+        """
+        return None
 
     @staticmethod
     @abc.abstractmethod

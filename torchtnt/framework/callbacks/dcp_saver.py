@@ -218,6 +218,9 @@ class DistributedCheckpointSaver(BaseCheckpointer):
 
         return True
 
+    def _get_pending_save(self) -> Optional[Future]:
+        return self._prev_snapshot if self._async_checkpoint else None
+
     def _wait(self, log_warning: bool = True) -> None:
         """
         If the previous async checkpoint is still running, wait for it to finish before continuing. Otherwise,
