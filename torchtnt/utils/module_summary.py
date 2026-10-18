@@ -269,7 +269,7 @@ def _get_module_flops_and_activation_sizes(
     forward_time_elapsed_ms = {}
     for module_name in forward_elapsed_times_sec:
         forward_time_elapsed_ms[module_name] = (
-            forward_elapsed_times_sec[module_name] / 1000.0
+            forward_elapsed_times_sec[module_name] * 1000.0
         )
 
     # Reverting all the changes:
