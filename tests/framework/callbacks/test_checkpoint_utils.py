@@ -135,6 +135,28 @@ class CheckpointUtilsTest(unittest.TestCase):
         self.assertNotIn("train_dataloader", epoch_done)
         self.assertIn("train_progress", epoch_done)
 
+    def test_get_app_state_keeps_train_dataloader_when_max_steps_stops_mid_epoch(
+        self,
+    ) -> None:
+        """A step-end checkpoint at max_steps mid-epoch must keep its loader.
+
+        A resume with a larger max_steps continues that epoch, so it needs the
+        loader position to not repeat batches.
+        """
+        my_unit = DummyTrainUnit(input_dim=2)
+        state = get_dummy_train_state()
+        state._active_phase = ActivePhase.TRAIN
+        train_state = none_throws(state.train_state)
+        train_state._dataloader = generate_dummy_stateful_dataloader(1, 1, 1)
+        train_state._max_steps = 1
+        train_state._max_steps_per_epoch = None
+
+        my_unit.train_progress.increment_step()
+        at_max_steps = _prepare_app_state_for_checkpoint(
+            state, my_unit, intra_epoch=True
+        )
+        self.assertIn("train_dataloader", at_max_steps)
+
     def test_get_step_phase_mapping(self) -> None:
         unit = DummyAutoUnit(module=nn.Linear(2, 2))
         unit.train_progress._num_steps_completed = 5
