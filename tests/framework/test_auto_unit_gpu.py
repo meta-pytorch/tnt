@@ -49,7 +49,6 @@ class DummySWAAutoUnit(DummyAutoUnit):
         if state.active_phase == ActivePhase.TRAIN:
             outputs = self.module(inputs)
         else:
-            # pyrefly: ignore [not-callable]
             outputs = self.swa_model(inputs) if self.swa_model else self.module(inputs)
 
         loss = torch.nn.functional.cross_entropy(outputs, targets)
@@ -380,7 +379,6 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the first step no_sync should be called since we accumulate gradients
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                # pyrefly: ignore [bad-argument-type]
                 state=state,
                 # pyrefly: ignore [bad-argument-type]
                 data=auto_unit.get_next_train_batch(state, dummy_iterator),
@@ -391,7 +389,6 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the second step no_sync should not be called since we run optimizer step
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                # pyrefly: ignore [bad-argument-type]
                 state=state,
                 # pyrefly: ignore [bad-argument-type]
                 data=auto_unit.get_next_train_batch(state, dummy_iterator),
@@ -421,7 +418,6 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the first step no_sync should be called since we accumulate gradients
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                # pyrefly: ignore [bad-argument-type]
                 state=state,
                 # pyrefly: ignore [bad-argument-type]
                 data=auto_unit.get_next_train_batch(state, dummy_iterator),
@@ -432,7 +428,6 @@ class TestAutoUnitGPU(unittest.TestCase):
         # for the second step no_sync should not be called since we run optimizer step
         with patch.object(auto_unit.module, "no_sync") as no_sync_mock:
             auto_unit.train_step(
-                # pyrefly: ignore [bad-argument-type]
                 state=state,
                 # pyrefly: ignore [bad-argument-type]
                 data=auto_unit.get_next_train_batch(state, dummy_iterator),

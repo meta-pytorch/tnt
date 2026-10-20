@@ -80,7 +80,6 @@ class MultiDataLoader:
         if iterator_cls is None:
             iterator_cls = DataIterationStrategyRegistry.get(self.iteration_strategy)
         # in practice, DataIterationStrategyRegistry.get() returns just concrete classes
-        # pyre-ignore[45]: Cannot instantiate abstract class `MultiIterator`.
         self.current_iterator = iterator_cls(
             individual_dataloaders=self.individual_dataloaders,
             iteration_strategy=self.iteration_strategy,
