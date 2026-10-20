@@ -473,7 +473,6 @@ def revert_sync_batchnorm(
         module_output.running_var = module.running_var
         module_output.num_batches_tracked = module.num_batches_tracked
         if hasattr(module, "qconfig"):
-            # pyre-fixme[16]: `_BatchNormXd` has no attribute `qconfig`.
             module_output.qconfig = module.qconfig
     for name, child in module.named_children():
         module_output.add_module(name, revert_sync_batchnorm(child, device))
@@ -676,7 +675,7 @@ def rank_zero_read_and_broadcast(
     def wrapper(*args: TParams.args, **kwargs: TParams.kwargs) -> TReturn:
         ret = None
         rank = get_global_rank()
-        process_group = kwargs.pop("process_group", None)  # pyre-ignore[16]
+        process_group = kwargs.pop("process_group", None)
 
         # Do all filesystem reads from rank 0 only
         if rank == 0:

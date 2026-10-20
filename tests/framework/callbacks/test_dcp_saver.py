@@ -92,7 +92,7 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
             def _checkpoint_save_callback(state: State, checkpoint_id: str) -> None:
                 saved_checkpoint_paths.append(checkpoint_id)
 
-            my_unit.on_checkpoint_save = _checkpoint_save_callback  # pyre-ignore
+            my_unit.on_checkpoint_save = _checkpoint_save_callback
 
             train(my_unit, dataloader, max_epochs=max_epochs, callbacks=[dcp_cb])
 
@@ -376,7 +376,6 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
             dcp_cb.restore(ckpt_path, my_new_unit)
 
             assert_state_dict_eq(
-                # pyrefly: ignore [missing-attribute]
                 tc,
                 # pyrefly: ignore [missing-attribute]
                 my_new_unit.optimizer.state_dict(),
@@ -590,7 +589,6 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
 
         my_unit = DummyPredictUnit(input_dim=input_dim)
 
-        # pyre-ignore[16]: Add new attribute for testing
         my_unit.output_mean = DummyMeanMetric()
 
         # pyre-ignore[16]: Add at least one element to the metric
@@ -676,7 +674,7 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
         batch_size = 2
 
         my_unit = DummyEvalUnit(input_dim=input_dim)
-        my_unit.loss = 0.1  # pyre-ignore[16]: Add new attribute for testing
+        my_unit.loss = 0.1
 
         dataloader = generate_dummy_stateful_dataloader(
             dataset_len, input_dim, batch_size

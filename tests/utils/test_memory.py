@@ -138,28 +138,22 @@ class MemoryTest(unittest.TestCase):
             tensor_map_x,
             input_x.size().numel() * input_x.element_size(),
         )
-        # pyre-fixme[6]: For 1st argument expected `Union[None, List[typing.Any],
         #  int, slice, Tensor, typing.Tuple[typing.Any, ...]]` but got `str`.
         self.assertTrue(inputs["y"]["z"] in tensor_map)
         self.assertEqual(
-            # pyre-fixme[6]: For 1st argument expected `Union[None,
             #  List[typing.Any], int, slice, Tensor, typing.Tuple[typing.Any, ...]]`
             #  but got `str`.
             tensor_map[inputs["y"]["z"]],
-            # pyre-fixme[6]: For 1st argument expected `Union[None,
             #  List[typing.Any], int, slice, Tensor, typing.Tuple[typing.Any, ...]]`
             #  but got `str`.
             inputs["y"]["z"].size().numel() * inputs["y"]["z"].element_size(),
         )
-        # pyre-fixme[6]: For 1st argument expected `Union[None, List[typing.Any],
         #  int, slice, Tensor, typing.Tuple[typing.Any, ...]]` but got `str`.
         self.assertTrue(inputs["y"]["t"] in tensor_map)
         self.assertEqual(
-            # pyre-fixme[6]: For 1st argument expected `Union[None,
             #  List[typing.Any], int, slice, Tensor, typing.Tuple[typing.Any, ...]]`
             #  but got `str`.
             tensor_map[inputs["y"]["t"]],
-            # pyre-fixme[6]: For 1st argument expected `Union[None,
             #  List[typing.Any], int, slice, Tensor, typing.Tuple[typing.Any, ...]]`
             #  but got `str`.
             inputs["y"]["t"].size().numel() * inputs["y"]["t"].element_size(),
@@ -217,7 +211,6 @@ class MemoryTest(unittest.TestCase):
         inputs = RandomModuleList()
         tensor_map = get_tensor_size_bytes_map(inputs)
         self.assertEqual(
-            # pyrefly: ignore [missing-attribute]
             len(tensor_map),
             # pyrefly: ignore [missing-attribute]
             2 * len(inputs.metric_list[0].window_buffer.buffers) + 6,

@@ -154,7 +154,6 @@ def _conv_backward_flop_jit(
     return flop_count
 
 
-# pyrefly: ignore [bad-assignment]
 flop_mapping: Dict[Callable[..., Any], Callable[[Tuple[Any], Tuple[Any]], Number]] = {
     aten.mm: _matmul_flop_jit,
     aten.matmul: _matmul_flop_jit,

@@ -333,7 +333,6 @@ def get_timer_summary(timer: TimerProtocol) -> str:
 
     max_key = max(len(a.action_name) for a in report.timed_action_stats)
 
-    # pyre-fixme[53]: Captured variable `max_key` is not annotated.
     def log_row(action: str, mean: str, num_calls: str, total: str, per: str) -> str:
         row = f"{sep}|  {action:<{max_key}s}\t|  {mean:<15}\t|"
         row += f"  {num_calls:<15}\t|  {total:<15}\t|  {per:<15}\t|"

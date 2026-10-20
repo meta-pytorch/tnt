@@ -636,7 +636,6 @@ class TestAutoUnit(unittest.TestCase):
             batch = auto_unit._get_next_batch(state, first_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
-            # pyrefly: ignore [bad-argument-type]
             auto_unit,
             train_prefetched=True,
             # pyrefly: ignore [bad-argument-type]
@@ -649,7 +648,6 @@ class TestAutoUnit(unittest.TestCase):
         # prefetched data is still from the previous data iter even though the new data iter is passed
         self.assertEqual(batch, 2)
         self._assert_next_batch_dicts(
-            # pyrefly: ignore [bad-argument-type]
             auto_unit,
             train_prefetched=True,
             # pyrefly: ignore [bad-argument-type]
@@ -689,7 +687,6 @@ class TestAutoUnit(unittest.TestCase):
             batch = auto_unit._get_next_batch(state, train_data_iter)
         self.assertEqual(batch, 1)
         self._assert_next_batch_dicts(
-            # pyrefly: ignore [bad-argument-type]
             auto_unit,
             train_prefetched=True,
             # pyrefly: ignore [bad-argument-type]

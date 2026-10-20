@@ -319,7 +319,6 @@ class TorchSnapshotSaverTest(unittest.TestCase):
             snapshot_cb.restore(ckpt_path, my_new_unit)
 
             assert_state_dict_eq(
-                # pyrefly: ignore [missing-attribute]
                 tc,
                 # pyrefly: ignore [missing-attribute]
                 my_new_unit.optimizer.state_dict(),
