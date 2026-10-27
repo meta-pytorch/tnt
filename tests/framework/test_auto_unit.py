@@ -7,6 +7,7 @@
 
 # pyre-strict
 
+import copy
 import unittest
 from typing import Any, Literal, Optional, Tuple, TypeVar
 from unittest.mock import MagicMock, Mock, patch
@@ -492,6 +493,37 @@ class TestAutoUnit(unittest.TestCase):
 
         tc = unittest.TestCase()
         tc.assertTrue(custom_noop_hook_called)
+
+    def test_compute_loss_and_backward_accumulates_without_stepping(self) -> None:
+        """
+        Test that _compute_loss_and_backward accumulates gradients across calls and leaves the optimizer step to _update_weights.
+        """
+        torch.manual_seed(0)
+        auto_unit = DummyAutoUnit(module=torch.nn.Linear(2, 2))
+        reference = copy.deepcopy(auto_unit.module)
+        state = get_dummy_train_state()
+        batches = [(torch.rand(2, 2), torch.randint(0, 2, (2,))) for _ in range(2)]
+
+        losses = [
+            auto_unit._compute_loss_and_backward(state, batch)[0] for batch in batches
+        ]
+
+        expected_losses = [
+            torch.nn.functional.cross_entropy(reference(inputs), targets)
+            for inputs, targets in batches
+        ]
+        torch.stack(expected_losses).sum().backward()
+        for loss, expected in zip(losses, expected_losses):
+            torch.testing.assert_close(loss, expected)
+        for param, expected in zip(
+            auto_unit.module.parameters(), reference.parameters()
+        ):
+            torch.testing.assert_close(param, expected)
+            torch.testing.assert_close(param.grad, expected.grad)
+
+        auto_unit._update_weights(state)
+        for param, before in zip(auto_unit.module.parameters(), reference.parameters()):
+            self.assertFalse(torch.equal(param, before))
 
     def test_is_last_batch(self) -> None:
         """
