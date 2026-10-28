@@ -692,10 +692,7 @@ class AutoUnit(
             self.train_progress.num_steps_completed_in_epoch + 1
         ) % self.gradient_accumulation_steps == 0 or self._is_last_batch
 
-        # zero the gradients if previous step updated weights
-        if self._weight_updated_in_prev_step and self.zero_grad_at_train_step_start:
-            self.zero_grad(state)
-            self._weight_updated_in_prev_step = False
+        self._maybe_zero_grad(state)
 
         # for pyre, assign to local variable
         module = self.module
@@ -720,6 +717,37 @@ class AutoUnit(
                 # we need to re-enable gradient sync
                 cast(FSDPModule, module).set_requires_gradient_sync(True)
 
+        with maybe_no_sync:
+            loss, outputs = self._compute_loss_and_backward(state, data)
+
+        total_grad_norm = None
+        if should_update_weights:
+            total_grad_norm = self._update_weights(state)
+
+        step = self.train_progress.num_steps_completed
+        results = TrainStepResults(loss, total_grad_norm, outputs)
+        self.on_train_step_end(state, data, step, results)
+        return loss, outputs
+
+    def _maybe_zero_grad(self, state: State) -> None:
+        """
+        Zero the gradients if the previous step updated weights and ``zero_grad_at_train_step_start`` deferred
+        zeroing to the start of this step.
+        """
+        if self._weight_updated_in_prev_step and self.zero_grad_at_train_step_start:
+            self.zero_grad(state)
+            self._weight_updated_in_prev_step = False
+
+    def _compute_loss_and_backward(
+        self, state: State, data: TData
+    ) -> Tuple[torch.Tensor, Any]:
+        """
+        Run the forward pass, loss and backward pass for one batch, without stepping the optimizer.
+        Gradients accumulate until ``_update_weights`` is called.
+
+        Returns:
+            The loss, normalized for gradient accumulation, and the outputs of ``compute_loss``.
+        """
         # if detect_anomaly is true, run forward and backward pass in detect_anomaly context
         detect_anomaly = self.detect_anomaly
         maybe_detect_anomaly = (
@@ -729,7 +757,7 @@ class AutoUnit(
         )
 
         grad_scaler = self.grad_scaler
-        with maybe_no_sync, maybe_detect_anomaly, self.maybe_loss_parallel():
+        with maybe_detect_anomaly, self.maybe_loss_parallel():
             with self.maybe_autocast_precision:
                 with get_timing_context(
                     state, f"{self.__class__.__name__}.compute_loss"
@@ -766,13 +794,6 @@ class AutoUnit(
                     ):
                         loss.backward(retain_graph=self.loss_backward_retain_graph)
 
-        total_grad_norm = None
-        if should_update_weights:
-            total_grad_norm = self._update_weights(state)
-
-        step = self.train_progress.num_steps_completed
-        results = TrainStepResults(loss, total_grad_norm, outputs)
-        self.on_train_step_end(state, data, step, results)
         return loss, outputs
 
     def _normalize_loss_for_gradient_accumulation(
