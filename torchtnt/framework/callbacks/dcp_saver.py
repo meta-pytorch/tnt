@@ -24,6 +24,7 @@ from torch.distributed.checkpoint.default_planner import (
     DefaultLoadPlanner,
     DefaultSavePlanner,
 )
+from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.checkpoint.planner import LoadPlanner, SavePlanner
 from torch.distributed.checkpoint.staging import AsyncStager
 from torchtnt.framework.state import EntryPoint
@@ -151,6 +152,34 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         self._knob_options: KnobOptions = knob_options or KnobOptions()
         self._prev_snapshot: Optional[Future] = None
 
+    def _on_checkpoint_save_complete(
+        self,
+        checkpoint_id: str,
+        metadata: Metadata,
+    ) -> None:
+        """Handle metadata returned by a successfully completed checkpoint save."""
+        pass
+
+    def _wrap_async_save_completion(
+        self,
+        save_completion: Future,
+        checkpoint_id: str,
+    ) -> Future:
+        callback_future: Future = Future()
+
+        def callback(f: Future) -> None:
+            try:
+                metadata: Metadata = f.result()
+                self._on_checkpoint_save_complete(checkpoint_id, metadata)
+            except BaseException as e:  # noqa: B036
+                # DCP's CheckpointException inherits BaseException.
+                callback_future.set_exception(e)
+            else:
+                callback_future.set_result(metadata)
+
+        save_completion.add_done_callback(callback)
+        return callback_future
+
     def _checkpoint_impl(
         self,
         state: State,
@@ -193,21 +222,27 @@ class DistributedCheckpointSaver(BaseCheckpointer):
             with get_timing_context(state, f"{self.__class__.__name__}.async_save"):
                 # Redundant check for safety
                 self._wait(log_warning=True)
-                prev_snapshot = dcp.async_save(
-                    state_dict={"app_state": MultiStateful(app_state)},
-                    checkpoint_id=checkpoint_id,
-                    process_group=self._process_group,
-                    storage_writer=storage_writer,
-                    planner=planner,
-                    async_stager=stager,
-                    use_collectives=self._knob_options.use_collectives,
+                save_future = cast(
+                    Future,
+                    dcp.async_save(
+                        state_dict={"app_state": MultiStateful(app_state)},
+                        checkpoint_id=checkpoint_id,
+                        process_group=self._process_group,
+                        storage_writer=storage_writer,
+                        planner=planner,
+                        async_stager=stager,
+                        use_collectives=self._knob_options.use_collectives,
+                    ),
                 )
-                self._prev_snapshot = cast(Future, prev_snapshot)
+                self._prev_snapshot = self._wrap_async_save_completion(
+                    save_future,
+                    checkpoint_id,
+                )
                 if curr_snapshot_wait:
                     self._wait(log_warning=False)
         else:
             with get_timing_context(state, f"{self.__class__.__name__}.save"):
-                dcp.save(
+                metadata = dcp.save(
                     state_dict={"app_state": MultiStateful(app_state)},
                     checkpoint_id=checkpoint_id,
                     process_group=self._process_group,
@@ -215,6 +250,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                     planner=planner,
                     use_collectives=self._knob_options.use_collectives,
                 )
+                self._on_checkpoint_save_complete(checkpoint_id, metadata)
 
         return True
 

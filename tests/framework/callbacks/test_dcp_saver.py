@@ -12,6 +12,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from concurrent.futures import Future
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from unittest import mock
 from unittest.mock import MagicMock, patch
@@ -22,6 +23,7 @@ from pyre_extensions import none_throws
 from torch import nn
 from torch.distributed.checkpoint import FileSystemReader, FileSystemWriter
 from torch.distributed.checkpoint._fsspec_filesystem import FsspecReader
+from torch.distributed.checkpoint.api import CheckpointException
 from torch.distributed.checkpoint.default_planner import (
     DefaultLoadPlanner,
     DefaultSavePlanner,
@@ -58,10 +60,153 @@ from torchtnt.utils.env import seed
 from torchtnt.utils.test_utils import skip_if_not_distributed
 
 
+class _SaveCompletionTrackingSaver(DistributedCheckpointSaver):
+    def __init__(self, dirpath: str, *, async_checkpoint: bool) -> None:
+        super().__init__(
+            dirpath,
+            save_every_n_train_steps=1,
+            async_checkpoint=async_checkpoint,
+            knob_options=KnobOptions(1),
+        )
+        self.completed_checkpoints: list[tuple[str, Metadata]] = []
+
+    def _on_checkpoint_save_complete(
+        self,
+        checkpoint_id: str,
+        metadata: Metadata,
+    ) -> None:
+        self.completed_checkpoints.append((checkpoint_id, metadata))
+
+
+class _FailingSaveCompletionSaver(_SaveCompletionTrackingSaver):
+    def _on_checkpoint_save_complete(
+        self,
+        checkpoint_id: str,
+        metadata: Metadata,
+    ) -> None:
+        raise RuntimeError("checkpoint completion failed")
+
+
 class DistributedCheckpointSaverTest(unittest.TestCase):
     def tearDown(self) -> None:
         # needed for github test, to reset WORLD_SIZE env var
         os.environ.pop("WORLD_SIZE", None)
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.dcp.save")
+    def test_sync_save_exposes_completion_metadata(self, save: MagicMock) -> None:
+        metadata = Metadata(state_dict_metadata={})
+        save.return_value = metadata
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saver = _SaveCompletionTrackingSaver(
+                temp_dir,
+                async_checkpoint=False,
+            )
+            unit = DummyTrainUnit(input_dim=2)
+            unit.train_progress._num_steps_completed = 1
+
+            saver.on_train_step_end(get_dummy_train_state(), unit)
+
+            self.assertEqual(
+                saver.completed_checkpoints,
+                [(f"{temp_dir}/epoch_0_train_step_1", metadata)],
+            )
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.dcp.save")
+    def test_sync_save_propagates_completion_failure(self, save: MagicMock) -> None:
+        save.return_value = Metadata(state_dict_metadata={})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saver = _FailingSaveCompletionSaver(
+                temp_dir,
+                async_checkpoint=False,
+            )
+            unit = DummyTrainUnit(input_dim=2)
+            unit.train_progress._num_steps_completed = 1
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "checkpoint completion failed",
+            ):
+                saver.on_train_step_end(get_dummy_train_state(), unit)
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.dcp.async_save")
+    def test_async_save_exposes_completion_metadata(
+        self,
+        async_save: MagicMock,
+    ) -> None:
+        metadata = Metadata(state_dict_metadata={})
+        upload: Future[Metadata] = Future()
+        async_save.return_value = upload
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saver = _SaveCompletionTrackingSaver(
+                temp_dir,
+                async_checkpoint=True,
+            )
+            unit = DummyTrainUnit(input_dim=2)
+            unit.train_progress._num_steps_completed = 1
+
+            saver.on_train_step_end(get_dummy_train_state(), unit)
+            self.assertEqual(saver.completed_checkpoints, [])
+
+            upload.set_result(metadata)
+            saver._wait(log_warning=False)
+
+            self.assertEqual(
+                saver.completed_checkpoints,
+                [(f"{temp_dir}/epoch_0_train_step_1", metadata)],
+            )
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.dcp.async_save")
+    def test_async_save_propagates_completion_failure(
+        self,
+        async_save: MagicMock,
+    ) -> None:
+        upload: Future[Metadata] = Future()
+        async_save.return_value = upload
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saver = _FailingSaveCompletionSaver(
+                temp_dir,
+                async_checkpoint=True,
+            )
+            unit = DummyTrainUnit(input_dim=2)
+            unit.train_progress._num_steps_completed = 1
+
+            saver.on_train_step_end(get_dummy_train_state(), unit)
+            upload.set_result(Metadata(state_dict_metadata={}))
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "checkpoint completion failed",
+            ):
+                saver._wait(log_warning=False)
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.dcp.async_save")
+    def test_async_save_propagates_checkpoint_exception(
+        self,
+        async_save: MagicMock,
+    ) -> None:
+        upload: Future[Metadata] = Future()
+        async_save.return_value = upload
+        checkpoint_error = CheckpointException("checkpoint upload failed", {})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saver = _SaveCompletionTrackingSaver(temp_dir, async_checkpoint=True)
+            unit = DummyTrainUnit(input_dim=2)
+            unit.train_progress._num_steps_completed = 1
+
+            saver.on_train_step_end(get_dummy_train_state(), unit)
+            self.assertFalse(none_throws(saver._prev_snapshot).done())
+
+            upload.set_exception(checkpoint_error)
+
+            self.assertTrue(none_throws(saver._prev_snapshot).done())
+            self.assertEqual(saver.completed_checkpoints, [])
+            with self.assertRaises(CheckpointException) as raised:
+                saver._wait(log_warning=False)
+            self.assertIs(raised.exception, checkpoint_error)
 
     def test_save_restore(self) -> None:
         input_dim = 2
