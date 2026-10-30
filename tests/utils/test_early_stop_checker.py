@@ -8,12 +8,62 @@
 # pyre-strict
 
 import unittest
+from typing import cast, Literal
 
 import torch
 from torchtnt.utils.early_stop_checker import EarlyStopChecker
 
 
 class EarlyStopCheckerTest(unittest.TestCase):
+    def test_reused_metric_tensor(self) -> None:
+        for mode, values in (("min", [4.0, 2.0, 2.0]), ("max", [2.0, 4.0, 4.0])):
+            for shape in ((), (1,), (1, 1)):
+                with self.subTest(mode=mode, shape=shape):
+                    checker = EarlyStopChecker(
+                        cast(Literal["min", "max"], mode), patience=1
+                    )
+                    metric = torch.empty(shape)
+                    decisions = []
+                    for value in values:
+                        metric.fill_(value)
+                        decisions.append(checker.check(metric))
+                    self.assertEqual(decisions, [False, False, True])
+
+    def test_best_value_is_detached_snapshot(self) -> None:
+        checker = EarlyStopChecker("min", patience=1)
+        metric = torch.tensor(4.0, requires_grad=True).square()
+        self.assertFalse(checker.check(metric))
+        best_value = checker.state_dict()["best_value"]
+
+        with torch.no_grad():
+            metric.zero_()
+
+        self.assertEqual(best_value.item(), 16.0)
+        self.assertFalse(best_value.requires_grad)
+        self.assertIsNone(best_value.grad_fn)
+
+    def test_reused_loss_buffer_in_training_loop(self) -> None:
+        weight = torch.nn.Parameter(torch.tensor(4.0))
+        optimizer = torch.optim.SGD([weight], lr=0.25)
+        checker = EarlyStopChecker("min", patience=1)
+        loss_buffer = torch.zeros(())
+        losses = []
+
+        for _ in range(6):
+            optimizer.zero_grad()
+            loss = weight.square()
+            loss.backward()
+            optimizer.step()
+            with torch.no_grad():
+                loss_buffer.copy_(weight.square())
+            losses.append(loss_buffer.item())
+            if checker.check(loss_buffer):
+                break
+
+        # SGD halves the weight each step, so every loss strictly improves.
+        self.assertEqual(losses, [4.0, 1.0, 0.25, 0.0625, 0.015625, 0.00390625])
+        self.assertEqual(weight.item(), 0.0625)
+
     def test_early_stop_patience(self) -> None:
         # Loss does not decrease beyond 0.25
         losses = [0.4, 0.3, 0.28, 0.25, 0.26, 0.25]
