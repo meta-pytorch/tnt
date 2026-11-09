@@ -71,6 +71,7 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
             to clean the difference. If best checkpoint config is enabled, this param will manage the top n checkpoints instead. Only supported for train or fit entrypoints.
         best_checkpoint_config: Configuration for saving the best checkpoint based on a monitored metric. The metric is read off the attribute of the unit prior to checkpoint. This param is ignored if not in train or fit entrypoints.
         process_group: The process group on which the ranks will communicate on. If the process group is not gloo-based, a new gloo-based process group will be created.
+        file_system: File system used to delete surplus checkpoints. If None, it is resolved from ``dirpath`` through the fsspec registry.
 
     Note:
         If torch.distributed is available and default process group is initialized, the constructor will call a collective operation for rank 0 to broadcast the dirpath to all other ranks
@@ -100,6 +101,7 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
         keep_last_n_checkpoints: Optional[int] = None,
         best_checkpoint_config: Optional[BestCheckpointConfig] = None,
         process_group: Optional[dist.ProcessGroup] = None,
+        file_system: Optional[fsspec.AbstractFileSystem] = None,
     ) -> None:
         if get_world_size() > 1 and not dist.is_initialized():
             raise RuntimeError(
@@ -156,6 +158,7 @@ class BaseCheckpointer(Callback, metaclass=abc.ABCMeta):
             keep_last_n_checkpoints,
             metadata_fnames=self.metadata_fnames,
             process_group=self._process_group,
+            file_system=file_system,
         )
 
     def _setup_gloo_pg(self, process_group: Optional[dist.ProcessGroup]) -> None:

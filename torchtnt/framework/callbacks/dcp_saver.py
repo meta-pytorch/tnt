@@ -12,6 +12,7 @@ import time
 from concurrent.futures import Future
 from typing import Any, cast, Dict, Iterable, List, Optional, Union
 
+import fsspec
 import torch
 import torch.distributed as dist
 from pyre_extensions import none_throws
@@ -106,6 +107,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         process_group: The process group on which the ranks will communicate on. default: ``None`` (the entire world)
         async_checkpoint: Whether to perform asynchronous checkpointing. Default: ``True``.
         knob_options: Additional keyword options for StorageWriter. <https://pytorch.org/docs/stable/distributed.checkpoint.html#torch.distributed.checkpoint.StorageWriter/>
+        file_system: File system used to delete surplus checkpoints. If None, it is resolved from ``dirpath`` through the fsspec registry.
 
     Note:
         If torch.distributed is available, there should be a process group is initialized. In this case DCP assumes the intention is to save/load checkpoints in distributed fashion.
@@ -135,6 +137,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         process_group: Optional[dist.ProcessGroup] = None,
         async_checkpoint: bool = False,
         knob_options: Optional[KnobOptions] = None,
+        file_system: Optional[fsspec.AbstractFileSystem] = None,
     ) -> None:
         super().__init__(
             dirpath=dirpath,
@@ -146,6 +149,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
             keep_last_n_checkpoints=keep_last_n_checkpoints,
             best_checkpoint_config=best_checkpoint_config,
             process_group=process_group,
+            file_system=file_system,
         )
         self._async_checkpoint = async_checkpoint
 
