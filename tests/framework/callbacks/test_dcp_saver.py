@@ -92,6 +92,36 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
         # needed for github test, to reset WORLD_SIZE env var
         os.environ.pop("WORLD_SIZE", None)
 
+    def test_provided_file_system_removes_surplus_checkpoints(self) -> None:
+        # No rm_in_background, so removals go through rm synchronously.
+        file_system = MagicMock(spec=["rm", "exists"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dcp_cb = DistributedCheckpointSaver(
+                temp_dir,
+                save_every_n_train_steps=1,
+                keep_last_n_checkpoints=1,
+                file_system=file_system,
+            )
+
+            train(
+                DummyTrainUnit(input_dim=2),
+                generate_random_dataloader(num_samples=6, input_dim=2, batch_size=2),
+                max_epochs=1,
+                callbacks=[dcp_cb],
+            )
+
+            rotated = [
+                f"{temp_dir}/epoch_0_train_step_1",
+                f"{temp_dir}/epoch_0_train_step_2",
+            ]
+            self.assertEqual(
+                file_system.rm.call_args_list,
+                [mock.call(path, recursive=True) for path in rotated],
+            )
+            # The default file system was not used, so nothing was deleted.
+            for path in rotated:
+                self.assertTrue(os.path.isdir(path))
+
     @patch("torchtnt.framework.callbacks.dcp_saver.dcp.save")
     def test_sync_save_exposes_completion_metadata(self, save: MagicMock) -> None:
         metadata = Metadata(state_dict_metadata={})
