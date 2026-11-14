@@ -219,7 +219,8 @@ class EarlyStopChecker:
             # Still improving
             should_stop = False
             message = self._improvement_message(val)
-            self._best_value = val
+            # Snapshot the value independently of a caller's reusable metric tensor.
+            self._best_value = val.detach().clone()
             self._patience_count = 0
             _log.debug(message)
 
