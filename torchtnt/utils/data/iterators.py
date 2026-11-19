@@ -28,11 +28,17 @@ from typing import (
     Union,
 )
 
-from python.migrations.py310 import StrEnum310
-
 try:
     from enum import StrEnum
 except ImportError:
+    try:
+        from python.migrations.py310 import StrEnum310
+    except ImportError:
+        # python.migrations is not available outside of fbcode
+        from enum import Enum
+
+        class StrEnum310(str, Enum):
+            pass
 
     class StrEnum(StrEnum310):
         pass
