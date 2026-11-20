@@ -39,15 +39,23 @@ from torchtnt.framework._test_utils import (
     DummyTrainUnit,
     generate_dummy_stateful_dataloader,
     generate_random_dataloader,
+    get_dummy_predict_state,
     get_dummy_train_state,
 )
 from torchtnt.framework.callbacks._checkpoint_utils import _PHASE_DL_STATE_KEY_MAPPING
-from torchtnt.framework.callbacks.checkpointer_types import KnobOptions, RestoreOptions
-from torchtnt.framework.callbacks.dcp_saver import DistributedCheckpointSaver
+from torchtnt.framework.callbacks.checkpointer_types import (
+    DataloaderTopologyRestoreMode,
+    KnobOptions,
+    RestoreOptions,
+)
+from torchtnt.framework.callbacks.dcp_saver import (
+    _RankLocalStateful,
+    DistributedCheckpointSaver,
+)
 from torchtnt.framework.evaluate import evaluate
 from torchtnt.framework.fit import fit
 from torchtnt.framework.predict import predict
-from torchtnt.framework.state import State
+from torchtnt.framework.state import ActivePhase, State
 from torchtnt.framework.train import train
 from torchtnt.utils.checkpoint import (
     BestCheckpointConfig,
@@ -505,6 +513,57 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
             "cpu:gloo,cuda:gloo",
             self._save_restore_ddp,
         )
+
+    @skip_if_not_distributed
+    def test_collective_checkpoint_preserves_rank_local_dataloader_state(
+        self,
+    ) -> None:
+        spawn_multi_process(
+            2,
+            "cpu:gloo,cuda:gloo",
+            self._collective_checkpoint_preserves_rank_local_dataloader_state,
+        )
+
+    @staticmethod
+    def _collective_checkpoint_preserves_rank_local_dataloader_state() -> None:
+        rank = get_global_rank()
+        dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2),
+            some_data=rank,
+        )
+        state = get_dummy_predict_state(dataloader)
+        state._active_phase = ActivePhase.PREDICT
+        unit = DummyPredictUnit(input_dim=2)
+        temp_dir = tempfile.mkdtemp() if rank == 0 else ""
+        checkpointer = DistributedCheckpointSaver(
+            temp_dir,
+            save_every_n_predict_steps=1,
+            knob_options=KnobOptions(
+                use_collectives=True,
+                preserve_rank_local_dataloader_state=True,
+            ),
+        )
+        checkpoint_id = os.path.join(checkpointer.dirpath, "epoch_0_predict_step_1")
+
+        try:
+            checkpointer._checkpoint_impl(
+                state=state,
+                unit=unit,
+                checkpoint_id=checkpoint_id,
+                hook="on_predict_step_end",
+            )
+
+            dataloader.some_data = -1
+            checkpointer.restore(
+                checkpoint_id,
+                unit,
+                predict_dataloader=dataloader,
+            )
+            unittest.TestCase().assertEqual(dataloader.some_data, rank)
+        finally:
+            dist.barrier()
+            if rank == 0:
+                shutil.rmtree(temp_dir)
 
     @staticmethod
     def _save_restore_ddp() -> None:
@@ -1234,6 +1293,226 @@ class DistributedCheckpointSaverTest(unittest.TestCase):
         self.assertIn(train_dl_key, app_state)
         self.assertIs(app_state[train_dl_key], stateful_dataloader)
 
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=4)
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_global_rank", return_value=2)
+    def test_rank_local_state_uses_versioned_dcp_native_payload(
+        self,
+        _mock_global_rank: MagicMock,
+        _mock_world_size: MagicMock,
+    ) -> None:
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2), some_data=9
+        )
+
+        state = _RankLocalStateful(stateful_dataloader).state_dict()
+
+        self.assertEqual(
+            state["__torchtnt_rank_2_of_4"],
+            {
+                "format_version": 1,
+                "world_size": 4,
+                "state": stateful_dataloader.state_dict(),
+            },
+        )
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=2)
+    def test_maybe_add_dataloader_prefers_complete_rank_local_format(
+        self, _mock_world_size: MagicMock
+    ) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.__torchtnt_rank_0_of_2": MagicMock(),
+                f"app_state.{train_dl_key}.__torchtnt_rank_1_of_2": MagicMock(),
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2), some_data=-1
+        )
+
+        app_state = DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+            app_state={},
+            checkpoint_path=None,
+            storage_reader=storage_reader,
+            train_dataloader=stateful_dataloader,
+        )
+
+        rank_local_stateful = app_state[train_dl_key]
+        self.assertIsInstance(rank_local_stateful, _RankLocalStateful)
+        rank_local_stateful.load_state_dict(
+            {
+                "__torchtnt_rank_0_of_2": {
+                    "format_version": 1,
+                    "world_size": 2,
+                    "state": {"some_data": 7},
+                }
+            }
+        )
+        self.assertEqual(stateful_dataloader.some_data, 7)
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=2)
+    def test_maybe_add_dataloader_strict_rejects_different_world_size(
+        self, _mock_world_size: MagicMock
+    ) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.__torchtnt_rank_{rank}_of_4": MagicMock()
+                for rank in range(4)
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "different world size"):
+            DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+                app_state={},
+                checkpoint_path=None,
+                storage_reader=storage_reader,
+                train_dataloader=stateful_dataloader,
+            )
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=2)
+    def test_maybe_add_dataloader_rank_zero_fallback_for_different_world_size(
+        self, _mock_world_size: MagicMock
+    ) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.__torchtnt_rank_{rank}_of_4": MagicMock()
+                for rank in range(4)
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2), some_data=-1
+        )
+
+        app_state = DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+            app_state={},
+            checkpoint_path=None,
+            storage_reader=storage_reader,
+            train_dataloader=stateful_dataloader,
+            dataloader_topology_restore_mode=(
+                DataloaderTopologyRestoreMode.RANK_ZERO_FALLBACK
+            ),
+        )
+
+        rank_local_stateful = app_state[train_dl_key]
+        self.assertIsInstance(rank_local_stateful, _RankLocalStateful)
+        self.assertEqual(
+            rank_local_stateful.state_dict().keys(), {"__torchtnt_rank_0_of_4"}
+        )
+        rank_local_stateful.load_state_dict(
+            {
+                "__torchtnt_rank_0_of_4": {
+                    "format_version": 1,
+                    "world_size": 4,
+                    "state": {"some_data": 11},
+                }
+            }
+        )
+        self.assertEqual(stateful_dataloader.some_data, 11)
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=2)
+    def test_maybe_add_dataloader_rejects_incomplete_rank_local_format(
+        self, _mock_world_size: MagicMock
+    ) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.__torchtnt_rank_0_of_3": MagicMock(),
+                f"app_state.{train_dl_key}.__torchtnt_rank_2_of_3": MagicMock(),
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "contiguous entry"):
+            DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+                app_state={},
+                checkpoint_path=None,
+                storage_reader=storage_reader,
+                train_dataloader=stateful_dataloader,
+                dataloader_topology_restore_mode=(
+                    DataloaderTopologyRestoreMode.RANK_ZERO_FALLBACK
+                ),
+            )
+
+    @patch("torchtnt.framework.callbacks.dcp_saver.get_world_size", return_value=3)
+    def test_maybe_add_dataloader_rejects_missing_trailing_rank(
+        self, _mock_world_size: MagicMock
+    ) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.__torchtnt_rank_{rank}_of_4": MagicMock()
+                for rank in range(3)
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "contiguous entry"):
+            DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+                app_state={},
+                checkpoint_path=None,
+                storage_reader=storage_reader,
+                train_dataloader=stateful_dataloader,
+                dataloader_topology_restore_mode=(
+                    DataloaderTopologyRestoreMode.RANK_ZERO_FALLBACK
+                ),
+            )
+
+    def test_maybe_add_dataloader_falls_back_to_legacy_format(self) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"app_state.{train_dl_key}.some_data": MagicMock(),
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        app_state = DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+            app_state={},
+            checkpoint_path=None,
+            storage_reader=storage_reader,
+            train_dataloader=stateful_dataloader,
+        )
+
+        self.assertIs(app_state[train_dl_key], stateful_dataloader)
+
+    def test_maybe_add_dataloader_does_not_match_unrelated_metadata(self) -> None:
+        train_dl_key = _PHASE_DL_STATE_KEY_MAPPING[Phase.TRAIN]
+        storage_reader = MagicMock(spec=FileSystemReader)
+        storage_reader.read_metadata.return_value = Metadata(
+            state_dict_metadata={
+                f"unrelated_{train_dl_key}_backup.some_data": MagicMock()
+            }
+        )
+        stateful_dataloader = DummyStatefulDataLoader(
+            dataloader=generate_random_dataloader(10, 2, 2)
+        )
+
+        app_state = DistributedCheckpointSaver._maybe_add_dataloader_to_app_state(
+            app_state={},
+            checkpoint_path=None,
+            storage_reader=storage_reader,
+            train_dataloader=stateful_dataloader,
+        )
+
+        self.assertNotIn(train_dl_key, app_state)
+
 
 def _raise_no_global_metadata() -> Metadata:
     raise AssertionError("Unknown module type rank_0")
@@ -1277,18 +1556,19 @@ class LazyResumeDataLoader:
 
 
 class DummyStatefulDataLoader:
-    def __init__(self, dataloader: DataLoader) -> None:
+    def __init__(self, dataloader: DataLoader, some_data: int = 1) -> None:
         self.dataloader = dataloader
+        self.some_data = some_data
         self.state_dict_call_count = 0
         self.load_state_dict_call_count = 0
 
     def state_dict(self) -> Dict[str, Any]:
         self.state_dict_call_count += 1
-        return {"some_data": 1}
+        return {"some_data": self.some_data}
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.load_state_dict_call_count += 1
-        return None
+        self.some_data = state_dict["some_data"]
 
     def __iter__(self) -> Iterator[object]:
         return iter(self.dataloader)
