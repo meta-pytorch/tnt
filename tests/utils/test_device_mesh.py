@@ -6,6 +6,8 @@
 
 import unittest
 
+import torch.distributed as dist
+from torch.distributed.device_mesh import DeviceMesh
 from torchtnt.utils.device_mesh import (
     create_device_mesh,
     get_dp_local_rank,
@@ -13,6 +15,11 @@ from torchtnt.utils.device_mesh import (
     GlobalMeshCoordinator,
 )
 from torchtnt.utils.distributed import get_global_rank, spawn_multi_process
+
+
+def _ranks(mesh: DeviceMesh) -> list[int]:
+    """Global ranks of this rank's group along a 1-D mesh."""
+    return sorted(dist.get_process_group_ranks(mesh.get_group()))
 
 
 class TestCreateDeviceMesh(unittest.TestCase):
@@ -494,3 +501,136 @@ class TestConservationViolation(unittest.TestCase):
             create_device_mesh(
                 dp_shard=2, dp_replicate=1, tp=2, ep=3, device_type="cpu"
             )
+
+
+class TestContextParallelMesh(unittest.TestCase):
+    """CP meshes: dp_mesh is the data mesh, loss_mesh is data x cp, and FSDP
+    shards over dp_shard x cp. Group membership is checked rank by rank,
+    because a wrong grouping trains silently on mismatched data."""
+
+    def test_cp_tp_dp(self) -> None:
+        spawn_multi_process(8, "gloo", self._test_cp_tp_dp)
+
+    @staticmethod
+    def _test_cp_tp_dp() -> None:
+        # (dp_shard=2, cp=2, tp=2) at world=8. Ranks are ordered
+        # (dp_replicate, dp_shard, cp, tp): rank = (shard * 2 + cp) * 2 + tp.
+        tc = unittest.TestCase()
+        gmc = GlobalMeshCoordinator(dp_shard=-1, cp=2, tp=2, device_type="cpu")
+        rank = get_global_rank()
+        tp_index, cp_index, shard = rank % 2, (rank // 2) % 2, rank // 4
+        cp_mesh, tp_mesh = gmc.cp_mesh, gmc.tp_mesh
+        assert cp_mesh is not None and tp_mesh is not None
+        tc.assertEqual(_ranks(cp_mesh), [shard * 4 + c * 2 + tp_index for c in (0, 1)])
+        tc.assertEqual(_ranks(tp_mesh), [shard * 4 + cp_index * 2 + t for t in (0, 1)])
+        tc.assertEqual(
+            _ranks(gmc.dp_mesh), [s * 4 + cp_index * 2 + tp_index for s in (0, 1)]
+        )
+        tc.assertEqual(get_dp_mesh_size(gmc), 2)
+        tc.assertEqual(get_dp_local_rank(gmc), shard)
+        tc.assertEqual(_ranks(gmc.loss_mesh), [i * 2 + tp_index for i in range(4)])
+        tc.assertEqual(_ranks(gmc.dense_fsdp_mesh), _ranks(gmc.loss_mesh))
+        tc.assertEqual(_ranks(gmc.fsdp_mesh), _ranks(gmc.loss_mesh))
+
+    def test_cp_only(self) -> None:
+        spawn_multi_process(4, "gloo", self._test_cp_only)
+
+    @staticmethod
+    def _test_cp_only() -> None:
+        # cp=4 at world=4: every rank splits the same batch, so the data mesh
+        # holds only this rank.
+        tc = unittest.TestCase()
+        gmc = GlobalMeshCoordinator(dp_shard=-1, cp=4, device_type="cpu")
+        cp_mesh = gmc.cp_mesh
+        assert cp_mesh is not None
+        tc.assertEqual(_ranks(cp_mesh), [0, 1, 2, 3])
+        tc.assertEqual(_ranks(gmc.dp_mesh), [get_global_rank()])
+        tc.assertEqual(get_dp_mesh_size(gmc), 1)
+        tc.assertEqual(get_dp_local_rank(gmc), 0)
+        tc.assertEqual(_ranks(gmc.loss_mesh), [0, 1, 2, 3])
+        tc.assertEqual(_ranks(gmc.fsdp_mesh), [0, 1, 2, 3])
+        tc.assertIsNone(gmc.tp_mesh)
+
+    def test_hsdp_cp(self) -> None:
+        spawn_multi_process(4, "gloo", self._test_hsdp_cp)
+
+    @staticmethod
+    def _test_hsdp_cp() -> None:
+        # (dp_replicate=2, dp_shard=1, cp=2) at world=4: rank = replica * 2 + cp.
+        tc = unittest.TestCase()
+        gmc = GlobalMeshCoordinator(
+            dp_shard=-1, dp_replicate=2, cp=2, device_type="cpu"
+        )
+        rank = get_global_rank()
+        replica, cp_index = rank // 2, rank % 2
+        cp_mesh = gmc.cp_mesh
+        assert cp_mesh is not None
+        tc.assertEqual(_ranks(cp_mesh), [replica * 2, replica * 2 + 1])
+        tc.assertEqual(gmc.dp_mesh.mesh_dim_names, ("dp_data",))
+        tc.assertEqual(_ranks(gmc.dp_mesh), [cp_index, 2 + cp_index])
+        tc.assertEqual(get_dp_local_rank(gmc), replica)
+        tc.assertEqual(_ranks(gmc.loss_mesh), [0, 1, 2, 3])
+        # HSDP wraps over (dp_replicate, fsdp), with fsdp spanning dp_shard x cp.
+        tc.assertEqual(gmc.fsdp_mesh.mesh_dim_names, ("dp_replicate", "fsdp"))
+        tc.assertEqual(_ranks(gmc.fsdp_mesh["fsdp"]), [replica * 2, replica * 2 + 1])
+        tc.assertEqual(_ranks(gmc.fsdp_mesh["dp_replicate"]), [cp_index, 2 + cp_index])
+
+    def test_ep_cp(self) -> None:
+        spawn_multi_process(8, "gloo", self._test_ep_cp)
+
+    @staticmethod
+    def _test_ep_cp() -> None:
+        # (ep=4, cp=2) at world=8: the expert meshes keep their shared-axis
+        # meaning, and the dense grid (world / tp = 8) splits into data=4 x cp=2.
+        tc = unittest.TestCase()
+        gmc = GlobalMeshCoordinator(dp_shard=-1, ep=4, cp=2, device_type="cpu")
+        rank = get_global_rank()
+        cp_mesh, ep_mesh, expert_fsdp_mesh = (
+            gmc.cp_mesh,
+            gmc.ep_mesh,
+            gmc.expert_fsdp_mesh,
+        )
+        assert cp_mesh is not None
+        assert ep_mesh is not None and expert_fsdp_mesh is not None
+        tc.assertEqual(ep_mesh.size(), 4)
+        tc.assertEqual(expert_fsdp_mesh.size(), 2)
+        tc.assertEqual(_ranks(cp_mesh), [rank // 2 * 2, rank // 2 * 2 + 1])
+        tc.assertEqual(_ranks(gmc.dp_mesh), [i * 2 + rank % 2 for i in range(4)])
+        tc.assertEqual(_ranks(gmc.loss_mesh), list(range(8)))
+        tc.assertEqual(_ranks(gmc.dense_fsdp_mesh), list(range(8)))
+
+    def test_cp1_matches_meshes_without_cp(self) -> None:
+        spawn_multi_process(8, "gloo", self._test_cp1_matches_meshes_without_cp)
+
+    @staticmethod
+    def _test_cp1_matches_meshes_without_cp() -> None:
+        tc = unittest.TestCase()
+        for kwargs in (
+            {"dp_replicate": 1, "tp": 1},
+            {"dp_replicate": 2, "tp": 1},
+            {"dp_replicate": 1, "tp": 2},
+            {"dp_replicate": 1, "tp": 2, "ep": 4},
+        ):
+            gmc = GlobalMeshCoordinator(dp_shard=-1, device_type="cpu", **kwargs)
+            tc.assertIsNone(gmc.cp_mesh)
+            tc.assertEqual(
+                gmc.dp_mesh.mesh_dim_names, gmc.dense_fsdp_mesh.mesh_dim_names
+            )
+            tc.assertEqual(_ranks(gmc.dp_mesh), _ranks(gmc.dense_fsdp_mesh))
+            tc.assertEqual(_ranks(gmc.loss_mesh), _ranks(gmc.dense_fsdp_mesh))
+
+    def test_cp_validation(self) -> None:
+        spawn_multi_process(4, "gloo", self._test_cp_validation)
+
+    @staticmethod
+    def _test_cp_validation() -> None:
+        tc = unittest.TestCase()
+        with tc.assertRaisesRegex(ValueError, "cp must be int >= 1"):
+            GlobalMeshCoordinator(dp_shard=-1, cp=0, device_type="cpu")
+        with tc.assertRaisesRegex(ValueError, "World size 4 != "):
+            create_device_mesh(dp_shard=-1, cp=3, device_type="cpu")
+        with tc.assertRaisesRegex(ValueError, "not divisible by cp=8"):
+            create_device_mesh(dp_shard=-1, ep=2, cp=8, device_type="cpu")
+        # Nothing above communicates, so without this a fast rank tears down its
+        # process group while a slow peer is still connecting, and gloo fails the peer.
+        dist.barrier()

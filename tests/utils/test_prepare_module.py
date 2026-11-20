@@ -296,7 +296,7 @@ class PrepareModelTest(unittest.TestCase):
         )
         mock_mesh = MagicMock(spec=DeviceMesh)
         mock_global_mesh = MagicMock(spec=GlobalMeshCoordinator)
-        mock_global_mesh.dp_mesh = mock_mesh
+        mock_global_mesh.dense_fsdp_mesh = mock_mesh
         module = prepare_fsdp2(
             module, torch.device("cpu"), strategy, global_mesh=mock_global_mesh
         )
@@ -312,7 +312,7 @@ class PrepareModelTest(unittest.TestCase):
         module = torch.nn.Linear(2, 2, device="cpu")
         mock_mesh = MagicMock(spec=DeviceMesh)
         mock_global_mesh = MagicMock(spec=GlobalMeshCoordinator)
-        mock_global_mesh.dp_mesh = mock_mesh
+        mock_global_mesh.dense_fsdp_mesh = mock_mesh
 
         strategy = FSDP2Strategy(modules_to_shard=[torch.nn.Linear])
         module = prepare_fsdp2(
@@ -334,7 +334,7 @@ class PrepareModelTest(unittest.TestCase):
         module = torch.nn.Linear(2, 2, device="cpu")
         mock_mesh = MagicMock(spec=DeviceMesh)
         mock_global_mesh = MagicMock(spec=GlobalMeshCoordinator)
-        mock_global_mesh.dp_mesh = mock_mesh
+        mock_global_mesh.dense_fsdp_mesh = mock_mesh
 
         strategy = FSDP2Strategy(
             modules_to_shard=[torch.nn.Linear], shard_on_largest_dim=True

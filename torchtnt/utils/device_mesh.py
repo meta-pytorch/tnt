@@ -26,12 +26,23 @@ class GlobalMeshCoordinator:
         ``ep >= tp`` and ``ep % tp == 0`` (TP sub-groups must evenly
         divide each EP group). Violations raise ``ValueError``.
 
+    Context parallelism (``cp > 1``) splits each sequence across ``cp`` ranks
+    that share one batch. The dense rank order is ``(dp_replicate, dp_shard,
+    cp, tp)``, TP innermost. CP gives three roles three different meshes:
+
+      - ``dp_mesh`` is the data mesh, the ranks that receive distinct
+        batches. It excludes CP peers.
+      - ``loss_mesh`` (data x cp) is where per-token loss and count sums
+        reduce, since a batch's tokens are split across CP peers.
+      - ``dense_fsdp_mesh`` and ``fsdp_mesh`` shard parameters over
+        ``dp_shard x cp``.
+
+    With ``cp == 1`` every mesh is the one built without CP.
+
     ``dp_shard = -1`` auto-infers from the world size and the other axes.
 
-    Sub-mesh accessors return ``None`` when the corresponding axis is
-    inactive: ``tp_mesh``, ``ep_mesh``, ``dense_fsdp_mesh``,
-    ``expert_fsdp_mesh``. ``dp_mesh`` is a back-compat alias for
-    ``dense_fsdp_mesh``.
+    ``tp_mesh``, ``ep_mesh``, ``cp_mesh`` and ``expert_fsdp_mesh`` return
+    ``None`` when their axis is inactive.
 
     Args:
         dp_shard: number of FSDP shards. ``-1`` (default) auto-infers.
@@ -40,6 +51,7 @@ class GlobalMeshCoordinator:
             back-compat; normalized to ``1`` internally.
         ep: expert-parallel degree. Default ``1``.
         device_type: device type. Default ``"cuda"``.
+        cp: context-parallel degree. Default ``1``.
     """
 
     dp_shard: int = -1
@@ -47,6 +59,7 @@ class GlobalMeshCoordinator:
     tp: Optional[int] = None
     ep: int = 1
     device_type: str = "cuda"
+    cp: int = 1
 
     # Set in __post_init__; declared here so dataclass field-discovery
     # surfaces them and type-checkers see them as instance attributes.
@@ -54,6 +67,7 @@ class GlobalMeshCoordinator:
     _dp_replicate_enabled: bool = field(init=False)
     _tp_enabled: bool = field(init=False)
     _ep_enabled: bool = field(init=False)
+    _cp_enabled: bool = field(init=False)
 
     def __post_init__(self) -> None:
         # Backwards-compat: ``tp=None`` (legacy callers) is normalized to
@@ -64,6 +78,8 @@ class GlobalMeshCoordinator:
             raise ValueError(f"tp must be int >= 1, got {self.tp!r}")
         if not isinstance(self.ep, int) or self.ep < 1:
             raise ValueError(f"ep must be int >= 1, got {self.ep!r}")
+        if not isinstance(self.cp, int) or self.cp < 1:
+            raise ValueError(f"cp must be int >= 1, got {self.cp!r}")
 
         assert isinstance(self.tp, int)
         tp: int = self.tp
@@ -88,28 +104,58 @@ class GlobalMeshCoordinator:
             tp=tp,
             ep=self.ep,
             device_type=self.device_type,
+            cp=self.cp,
         )
         self._dp_replicate_enabled = self.dp_replicate > 1
         self._tp_enabled = tp > 1
         self._ep_enabled = self.ep > 1
+        self._cp_enabled = self.cp > 1
 
     @property
     def dp_mesh(self) -> DeviceMesh:
-        """Backwards-compat alias for :attr:`dense_fsdp_mesh`.
+        """Data mesh: the ranks that receive distinct batches.
 
-        Returns the FSDP grid for DENSE parameters. Callers that pre-date
-        the dense/expert split should migrate to the explicit accessor;
-        for expert weights, use :attr:`expert_fsdp_mesh` instead (the two
-        differ in width AND physical groupings when ``tp < ep``).
+        Samplers and dataloaders shard over it. With ``cp == 1`` it is
+        :attr:`dense_fsdp_mesh`. With ``cp > 1`` it excludes CP peers, which
+        share a batch, so FSDP wrapping and per-token loss sums must not use
+        it: they belong on :attr:`fsdp_mesh` / :attr:`dense_fsdp_mesh` and
+        :attr:`loss_mesh`, or CP peers' gradients and tokens are left out.
+        """
+        if not self._cp_enabled:
+            return self.dense_fsdp_mesh
+        # pyrefly: ignore [missing-attribute]
+        return self.device_mesh._dp_data_mesh
+
+    @property
+    def loss_mesh(self) -> DeviceMesh:
+        """Ranks whose tokens partition the step's batches: data x cp.
+
+        Reduce per-token loss, token-count and metric sums over this mesh;
+        :attr:`dp_mesh` leaves out the tokens held by CP peers. Data x cp is
+        every rank that shares a TP index, HSDP replicas included, which is
+        exactly :attr:`dense_fsdp_mesh` in every regime; so this returns it,
+        and its size is also the width FSDP averages dense gradients over.
         """
         return self.dense_fsdp_mesh
+
+    @property
+    def cp_mesh(self) -> Optional[DeviceMesh]:
+        """CP grid of size ``cp``: the ranks that split one batch's sequences.
+
+        Returns ``None`` when ``cp == 1``.
+        """
+        if not self._cp_enabled:
+            return None
+        # pyrefly: ignore [missing-attribute]
+        return self.device_mesh._cp_view["cp"]
 
     @property
     def dense_fsdp_mesh(self) -> DeviceMesh:
         """FSDP grid for DENSE (non-expert) parameters.
 
-        Width: ``world / tp`` when ``ep > 1`` (shared-axis), else the
-        standard FSDP width (``= dp_shard``).
+        Width: ``world / tp`` in every regime, i.e. every rank that shares a
+        TP index (``dp_replicate * dp_shard * cp`` when ``ep == 1``). CP peers
+        shard parameters too, so they are inside this grid.
 
         Sub-axis of ``dense_mesh`` so it shares a parent with
         :attr:`tp_mesh` — FSDP2 can promote dense DTensors over the
@@ -140,6 +186,8 @@ class GlobalMeshCoordinator:
         Falls back to the 1-D ``fsdp`` sub-mesh when ``dp_replicate == 1``
         (no replication -> plain FSDP ``FULL_SHARD``), so callers that do not
         opt into HSDP see identical behavior to :attr:`dense_fsdp_mesh`.
+
+        With ``cp > 1`` the ``fsdp`` axis spans ``dp_shard x cp``.
         """
         if self._dp_replicate_enabled:
             # pyre-ignore[16]
@@ -253,28 +301,34 @@ def create_device_mesh(
     tp: Optional[int] = None,
     ep: int = 1,
     device_type: str = "cuda",
+    cp: int = 1,
 ) -> DeviceMesh:
     """Build a flat 1D world mesh, then ``_unflatten`` it into TWO
     independent 3-D named parent views: ``dense_mesh`` and ``sparse_mesh``.
 
     The returned ``DeviceMesh`` has private attributes ``_dense_view``
     and ``_sparse_view`` that hold the two named 3-D parent views;
-    ``_sparse_view`` is ``None`` when ``ep == 1``.
+    ``_sparse_view`` is ``None`` when ``ep == 1``. With ``cp > 1`` the dense
+    view's ``fsdp`` axis spans ``dp_shard x cp``, ``_cp_view`` splits it into
+    ``(dp_replicate, dp_shard, cp, tp)`` and ``_dp_data_mesh`` is the data
+    mesh; both are ``None`` when ``cp == 1``.
 
     Args:
         dp_shard: FSDP shard width. ``-1`` (default) auto-infers from the
             world size and the other axes (using ``ep`` as the divisor
-            when ``ep > 1``, else ``tp``).
+            when ``ep > 1``, else ``cp * tp``).
         dp_replicate: HSDP outer replicate width. Default ``1``.
         tp: tensor-parallel degree. ``None`` is treated as ``1`` for
             backwards compatibility with callers that have not adopted
             the new spec.
         ep: expert-parallel degree. Default ``1``.
         device_type: device type. Default ``"cuda"``.
+        cp: context-parallel degree. Default ``1``.
 
     Returns:
-        ``DeviceMesh`` with ``_dense_view`` (always set) and
-        ``_sparse_view`` (set only when ``ep > 1``) attributes attached.
+        ``DeviceMesh`` with ``_dense_view`` (always set), ``_sparse_view``
+        (set only when ``ep > 1``), ``_cp_view`` and ``_dp_data_mesh`` (set
+        only when ``cp > 1``) attributes attached.
 
     Note: ``init_process_group`` should be called prior to this function.
     """
@@ -297,13 +351,13 @@ def create_device_mesh(
                 "Under shared-axis EP+TP (ep>1), tp is NOT in the product."
             )
     else:
-        # TP-only mode / pure FSDP: world = dp_replicate * dp_shard * tp.
+        # TP-only mode / pure FSDP: world = dp_replicate * dp_shard * cp * tp.
         if dp_shard == -1:
-            dp_shard = world_size // (dp_replicate * tp_int)
-        if world_size != dp_shard * dp_replicate * tp_int:
+            dp_shard = world_size // (dp_replicate * cp * tp_int)
+        if world_size != dp_shard * dp_replicate * cp * tp_int:
             raise ValueError(
                 f"World size {world_size} != dp_shard={dp_shard} * "
-                f"dp_replicate={dp_replicate} * tp={tp_int}. "
+                f"dp_replicate={dp_replicate} * cp={cp} * tp={tp_int}. "
                 "Under TP-only mode (ep=1), ep is NOT in the product."
             )
 
@@ -318,6 +372,11 @@ def create_device_mesh(
         # === Shared-axis (ep > 1) ===
         #   fsdp = world / (dp_replicate * tp)
         fsdp = world_size // (dp_replicate * tp_int)
+        if fsdp % cp != 0:
+            raise ValueError(
+                f"Dense FSDP width {fsdp} (world / (dp_replicate * tp)) is not "
+                f"divisible by cp={cp}; CP peers must split it evenly."
+            )
         dense_mesh = world_mesh._unflatten(
             0,
             (dp_replicate, fsdp, tp_int),
@@ -349,7 +408,7 @@ def create_device_mesh(
         world_mesh._dp_sparse_mesh = dp_sparse_mesh  # pyre-ignore[16]
     else:
         # === TP-only mode / pure FSDP (ep == 1) ===
-        fsdp = dp_shard
+        fsdp = dp_shard * cp
         dense_mesh = world_mesh._unflatten(
             0,
             (dp_replicate, fsdp, tp_int),
@@ -362,5 +421,22 @@ def create_device_mesh(
         world_mesh._sparse_view = None  # pyre-ignore[16]
         world_mesh._dp_dense_mesh = dp_dense_mesh  # pyre-ignore[16]
         world_mesh._dp_sparse_mesh = None  # pyre-ignore[16]
+
+    world_mesh._cp_view = None  # pyrefly: ignore [missing-attribute]
+    world_mesh._dp_data_mesh = None  # pyrefly: ignore [missing-attribute]
+    if cp > 1:
+        # Split the dense FSDP axis rather than unflattening the world again:
+        # this creates only the dp_shard and cp groups. CP sits inside dp_shard
+        # and outside tp, so CP peers are adjacent ranks and the data mesh is
+        # the FSDP grid without them.
+        cp_view = dense_mesh._unflatten("fsdp", (fsdp // cp, cp), ("dp_shard", "cp"))
+        if dp_replicate > 1:
+            dp_data_mesh = cp_view[("dp_replicate", "dp_shard")]._flatten(
+                mesh_dim_name="dp_data"
+            )
+        else:
+            dp_data_mesh = cp_view["dp_shard"]
+        world_mesh._cp_view = cp_view  # pyrefly: ignore [missing-attribute]
+        world_mesh._dp_data_mesh = dp_data_mesh  # pyrefly: ignore [missing-attribute]
 
     return world_mesh
