@@ -421,7 +421,9 @@ def prepare_fsdp2(
         pg = dist.distributed_c10d._get_default_group()
         mesh = init_device_mesh(device.type, mesh_shape=(pg.size(),))
     else:
-        mesh = global_mesh.dp_mesh
+        # Not dp_mesh: under context parallelism it excludes CP peers, and FSDP
+        # over it would never combine their gradients.
+        mesh = global_mesh.dense_fsdp_mesh
 
     fsdp_kwargs: Dict[str, Any] = {
         "mesh": mesh,  # TODO we only configure 1D mesh for now, look into supporting HSDP
