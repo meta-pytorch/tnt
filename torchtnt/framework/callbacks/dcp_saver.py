@@ -9,7 +9,7 @@ import inspect
 import logging
 import time
 from concurrent.futures import Future
-from typing import Any, cast, Dict, Iterable, List, Optional, Union
+from typing import Any, cast, Dict, Iterable, List, Optional, Tuple, Union
 
 import fsspec
 import torch
@@ -45,7 +45,11 @@ from torchtnt.framework.callbacks._checkpoint_utils import (
     _prepare_app_state_for_restore,
 )
 from torchtnt.framework.callbacks.base_checkpointer import BaseCheckpointer
-from torchtnt.framework.callbacks.checkpointer_types import KnobOptions, RestoreOptions
+from torchtnt.framework.callbacks.checkpointer_types import (
+    DataloaderTopologyRestoreMode,
+    KnobOptions,
+    RestoreOptions,
+)
 from torchtnt.framework.state import State
 from torchtnt.framework.unit import (
     AppStateMixin,
@@ -59,7 +63,11 @@ from torchtnt.framework.unit import (
 )
 from torchtnt.framework.utils import get_timing_context
 from torchtnt.utils.checkpoint import BestCheckpointConfig, CheckpointPath, Phase
-from torchtnt.utils.distributed import get_global_rank, get_or_create_gloo_pg
+from torchtnt.utils.distributed import (
+    get_global_rank,
+    get_or_create_gloo_pg,
+    get_world_size,
+)
 from torchtnt.utils.rank_zero_log import rank_zero_info, rank_zero_warn
 from torchtnt.utils.stateful import MultiStateful, Stateful
 from typing_extensions import TypeAlias
@@ -70,6 +78,122 @@ logger: logging.Logger = logging.getLogger(__name__)
 TDataloader: TypeAlias = Union[
     Iterable[TTrainData], Iterable[TEvalData], Iterable[TPredictData]
 ]
+
+_RANK_LOCAL_STATE_PREFIX = "__torchtnt_rank_"
+_RANK_LOCAL_STATE_WORLD_SIZE_SEPARATOR = "_of_"
+_RANK_LOCAL_STATE_FORMAT_VERSION = 1
+_RANK_LOCAL_STATE_FORMAT_VERSION_KEY = "format_version"
+_RANK_LOCAL_STATE_WORLD_SIZE_KEY = "world_size"
+_RANK_LOCAL_STATE_STATE_KEY = "state"
+
+
+class _RankLocalStateful:
+    """Give rank-local state a unique DCP key in collective checkpoints."""
+
+    def __init__(
+        self,
+        stateful: Stateful,
+        *,
+        source_rank: Optional[int] = None,
+        source_world_size: Optional[int] = None,
+        allow_world_size_mismatch: bool = False,
+    ) -> None:
+        self._stateful = stateful
+        self._rank = get_global_rank()
+        self._source_rank = self._rank if source_rank is None else source_rank
+        self._world_size = get_world_size()
+        self._source_world_size = (
+            self._world_size if source_world_size is None else source_world_size
+        )
+        self._allow_world_size_mismatch = allow_world_size_mismatch
+
+    @property
+    def rank_key(self) -> str:
+        return (
+            f"{_RANK_LOCAL_STATE_PREFIX}{self._source_rank}"
+            f"{_RANK_LOCAL_STATE_WORLD_SIZE_SEPARATOR}{self._source_world_size}"
+        )
+
+    def state_dict(self) -> Dict[str, Any]:
+        return {
+            self.rank_key: {
+                _RANK_LOCAL_STATE_FORMAT_VERSION_KEY: _RANK_LOCAL_STATE_FORMAT_VERSION,
+                _RANK_LOCAL_STATE_WORLD_SIZE_KEY: self._source_world_size,
+                _RANK_LOCAL_STATE_STATE_KEY: self._stateful.state_dict(),
+            }
+        }
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        rank_state = state_dict.get(self.rank_key)
+        if not isinstance(rank_state, dict):
+            raise RuntimeError(
+                "Cannot restore rank-local dataloader state because the saved "
+                f"entry for rank {self._source_rank} is not a dictionary."
+            )
+
+        format_version = rank_state.get(_RANK_LOCAL_STATE_FORMAT_VERSION_KEY)
+        if format_version != _RANK_LOCAL_STATE_FORMAT_VERSION:
+            raise RuntimeError(
+                "Cannot restore rank-local dataloader state with format version "
+                f"{format_version}; expected "
+                f"{_RANK_LOCAL_STATE_FORMAT_VERSION}."
+            )
+        saved_world_size = rank_state.get(_RANK_LOCAL_STATE_WORLD_SIZE_KEY)
+        if saved_world_size != self._source_world_size:
+            raise RuntimeError(
+                "Cannot restore rank-local dataloader state because the saved "
+                "world size does not match its checkpoint key: "
+                f"key={self._source_world_size}, payload={saved_world_size}."
+            )
+        if saved_world_size != self._world_size and not self._allow_world_size_mismatch:
+            raise RuntimeError(
+                "Cannot restore rank-local dataloader state with a different "
+                f"world size: checkpoint={saved_world_size}, "
+                f"current={self._world_size}."
+            )
+        state = rank_state.get(_RANK_LOCAL_STATE_STATE_KEY)
+        if not isinstance(state, dict):
+            raise RuntimeError(
+                "Cannot restore rank-local dataloader state because its payload "
+                "is not a dictionary."
+            )
+        self._stateful.load_state_dict(state)
+
+
+def _parse_rank_local_state_key(rank_component: str) -> Optional[Tuple[int, int]]:
+    if not rank_component.startswith(_RANK_LOCAL_STATE_PREFIX):
+        return None
+    rank_and_world_size = rank_component.removeprefix(_RANK_LOCAL_STATE_PREFIX)
+    rank_string, separator, world_size_string = rank_and_world_size.partition(
+        _RANK_LOCAL_STATE_WORLD_SIZE_SEPARATOR
+    )
+    if (
+        not separator
+        or not rank_string.isdecimal()
+        or not world_size_string.isdecimal()
+    ):
+        return None
+    return int(rank_string), int(world_size_string)
+
+
+def _make_dataloaders_rank_local(app_state: Dict[str, Stateful]) -> None:
+    for dl_key in _PHASE_DL_STATE_KEY_MAPPING.values():
+        if (dataloader := app_state.get(dl_key)) is not None:
+            app_state[dl_key] = _RankLocalStateful(dataloader)
+
+
+def _matching_dataloader_metadata_keys(
+    metadata_keys: Iterable[str], dl_key: str
+) -> List[str]:
+    for dataloader_key in (f"app_state.{dl_key}", dl_key):
+        matching_keys = [
+            key
+            for key in metadata_keys
+            if key == dataloader_key or key.startswith(f"{dataloader_key}.")
+        ]
+        if matching_keys:
+            return matching_keys
+    return []
 
 
 class DistributedCheckpointSaver(BaseCheckpointer):
@@ -220,6 +344,11 @@ class DistributedCheckpointSaver(BaseCheckpointer):
             storage_writer = Writer(checkpoint_id, **self.default_writer_options)
 
         app_state = _prepare_app_state_for_checkpoint(state, unit, intra_epoch)
+        if (
+            self._knob_options.use_collectives
+            and self._knob_options.preserve_rank_local_dataloader_state
+        ):
+            _make_dataloaders_rank_local(app_state)
         # TODO: evaluate whether we need to implement the equivalent of torchsnapshot.RNGState()
         if self._async_checkpoint:
             with get_timing_context(state, f"{self.__class__.__name__}.async_save"):
@@ -411,6 +540,7 @@ class DistributedCheckpointSaver(BaseCheckpointer):
             train_dataloader,
             eval_dataloader,
             predict_dataloader,
+            dataloader_topology_restore_mode=restore_options.dataloader_topology_restore_mode,
         )
 
         if restore_options.init_optim_states:
@@ -445,6 +575,9 @@ class DistributedCheckpointSaver(BaseCheckpointer):
         train_dataloader: Optional[Iterable[TTrainData]] = None,
         eval_dataloader: Optional[Iterable[TEvalData]] = None,
         predict_dataloader: Optional[Iterable[TPredictData]] = None,
+        dataloader_topology_restore_mode: DataloaderTopologyRestoreMode = (
+            DataloaderTopologyRestoreMode.STRICT
+        ),
     ) -> Dict[str, Stateful]:
         """
         Appends the dataloader state to the application state.
@@ -500,14 +633,97 @@ class DistributedCheckpointSaver(BaseCheckpointer):
                 "Failed to read checkpoint metadata for dataloader restoration."
             )
 
-        for key in metadata.state_dict_metadata.keys():
-            for phase in candidate_dataloaders.keys():
-                if (dl_key := _PHASE_DL_STATE_KEY_MAPPING[phase]) in key:
-                    if dl_key not in app_state:
-                        app_state[dl_key] = cast(
-                            Stateful, none_throws(candidate_dataloaders[phase])
+        metadata_keys = metadata.state_dict_metadata.keys()
+        for phase, dataloader in candidate_dataloaders.items():
+            dl_key = _PHASE_DL_STATE_KEY_MAPPING[phase]
+            matching_keys = _matching_dataloader_metadata_keys(metadata_keys, dl_key)
+            if not matching_keys:
+                continue
+
+            stateful_dataloader = cast(Stateful, none_throws(dataloader))
+            dataloader_keys = (f"app_state.{dl_key}", dl_key)
+            new_format_keys = [
+                (key, dataloader_key)
+                for key in matching_keys
+                for dataloader_key in dataloader_keys
+                if key.startswith(f"{dataloader_key}.{_RANK_LOCAL_STATE_PREFIX}")
+            ]
+            if new_format_keys:
+                rank_components = {
+                    rank_component
+                    for key, dataloader_key in new_format_keys
+                    for rank_component in [
+                        key.removeprefix(f"{dataloader_key}.").split(".", 1)[0]
+                    ]
+                }
+                parsed_rank_components = {
+                    parsed_rank_component
+                    for rank_component in rank_components
+                    if (
+                        parsed_rank_component := _parse_rank_local_state_key(
+                            rank_component
                         )
-                        logger.info(f"Restoring dataloader with key: {dl_key}")
+                    )
+                    is not None
+                }
+                if len(parsed_rank_components) != len(rank_components):
+                    raise RuntimeError(
+                        "Cannot restore rank-local dataloader state because the "
+                        "checkpoint contains an invalid rank-local key."
+                    )
+                saved_world_sizes = {
+                    world_size for _, world_size in parsed_rank_components
+                }
+                if len(saved_world_sizes) != 1:
+                    raise RuntimeError(
+                        "Cannot restore rank-local dataloader state because the "
+                        "checkpoint contains inconsistent saved world sizes: "
+                        f"{sorted(saved_world_sizes)}."
+                    )
+                saved_world_size = next(iter(saved_world_sizes))
+                saved_ranks = {rank for rank, _ in parsed_rank_components}
+                expected_saved_ranks = set(range(saved_world_size))
+                if saved_ranks != expected_saved_ranks:
+                    raise RuntimeError(
+                        "Cannot restore rank-local dataloader state because the "
+                        "checkpoint does not contain a contiguous entry for every "
+                        "saved rank. The checkpoint may be incomplete: "
+                        f"expected={sorted(expected_saved_ranks)}, "
+                        f"found={sorted(saved_ranks)}."
+                    )
+                current_world_size = get_world_size()
+                if saved_world_size == current_world_size:
+                    app_state[dl_key] = _RankLocalStateful(stateful_dataloader)
+                elif (
+                    dataloader_topology_restore_mode
+                    == DataloaderTopologyRestoreMode.RANK_ZERO_FALLBACK
+                ):
+                    app_state[dl_key] = _RankLocalStateful(
+                        stateful_dataloader,
+                        source_rank=0,
+                        source_world_size=saved_world_size,
+                        allow_world_size_mismatch=True,
+                    )
+                    logger.warning(
+                        "Restoring rank-zero dataloader state on every rank because "
+                        "the checkpoint and current world sizes differ: "
+                        f"checkpoint={saved_world_size}, current={current_world_size}. "
+                        "This is only correct for dataloaders that can repartition "
+                        "rank-zero state for the current topology."
+                    )
+                else:
+                    raise RuntimeError(
+                        "Cannot restore rank-local dataloader state with a different "
+                        f"world size: checkpoint={saved_world_size}, "
+                        f"current={current_world_size}. Set "
+                        "dataloader_topology_restore_mode=rank_zero_fallback only "
+                        "if the dataloader can repartition rank-zero state."
+                    )
+            else:
+                # Checkpoints written before rank-local namespacing, and
+                # non-collective checkpoints, use the unqualified legacy key.
+                app_state[dl_key] = stateful_dataloader
+            logger.info(f"Restoring dataloader with key: {dl_key}")
 
         if dl_missing_in_ckpt := [
             phase

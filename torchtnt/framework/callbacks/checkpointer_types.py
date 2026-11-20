@@ -6,7 +6,15 @@
 
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
+
+
+class DataloaderTopologyRestoreMode(str, Enum):
+    """Controls dataloader restore behavior when the world size changes."""
+
+    STRICT = "strict"
+    RANK_ZERO_FALLBACK = "rank_zero_fallback"
 
 
 # TODO: eventually support overriding all knobs
@@ -26,6 +34,10 @@ class KnobOptions:
                          (e.g. ~50 minutes of a ~67 minute save wall at 397B TP=8 EP=16). Trade-off:
                          the resulting checkpoint is no longer cross-world re-shardable; restart
                          with the same parallelism layout still works.
+        preserve_rank_local_dataloader_state: If ``True``, namespace each stateful dataloader's
+                                              opaque state by rank in collective DCP checkpoints.
+                                              Defaults to ``False`` so callers can opt in without
+                                              changing existing checkpoint formats fleet-wide.
     """
 
     # use a more conservative number of concurrent IO operations per rank in Checkpointing
@@ -36,6 +48,8 @@ class KnobOptions:
     enable_storage_optimization: bool = True
     # Skip DCP coord-side gather/scatter rounds.
     use_collectives: bool = True
+    # Preserve distinct opaque dataloader state from every rank in collective DCP.
+    preserve_rank_local_dataloader_state: bool = False
 
 
 @dataclass
@@ -55,6 +69,11 @@ class RestoreOptions:
         init_optim_states: Whether to initialize the optimizer state. Defaults to True. Toggle off
             if running into issues with loading optimizer state. This will reset optimizer state,
             which may affect training in some cases.
+        dataloader_topology_restore_mode: How to restore rank-local dataloader state
+            when the checkpoint world size differs from the current world size. By
+            default, reject the restore. ``RANK_ZERO_FALLBACK`` loads the saved rank
+            zero state on every current rank and must only be used by dataloaders that
+            can repartition that shared state for the new topology.
     """
 
     restore_modules: bool = True
@@ -66,3 +85,6 @@ class RestoreOptions:
     restore_metrics: bool = True
     strict: bool = True
     init_optim_states: bool = True
+    dataloader_topology_restore_mode: DataloaderTopologyRestoreMode = (
+        DataloaderTopologyRestoreMode.STRICT
+    )
